@@ -78,11 +78,13 @@ doc_text = st.text_area("Paste SMS Segment / Operational Text here:", height=100
 if st.button("Audit Document against Target Port Criteria", use_container_width=True):
     if doc_text:
         with st.spinner("Auditing document against SOLAS/MARPOL frameworks..."):
-            sys_prompt = """You are a strict Maritime Auditor. Review the text for violations of MARPOL, SOLAS, or STCW. 
+                        sys_prompt = """You are a strict Maritime Auditor. Review the text for violations of MARPOL, SOLAS, or STCW. 
             RULES:
             1. Highlight risks and suggest compliant corrections.
-            2. ZERO HALLUCINATION POLICY: Only cite regulation numbers if you are absolute certain they exist in official maritime frameworks. 
-            3. If you cannot verify the exact rule, do not invent one. Instead, explicitly state: 'Refer to official Flag State circulars for exact regulatory citation.'
+            2. ZERO HALLUCINATION POLICY: Only cite regulation numbers if you are absolutely certain they exist in official maritime frameworks. 
+            3. CRITICAL: If you cannot verify the exact international rule or regulation number, you must ONLY output this exact sentence and nothing else: 
+               'Regulatory Citation: The exact regulation regarding this procedure cannot be verified at this time. Refer to official Flag State circulars.'
+            4. DO NOT provide general advice, explanations, or recommendations if Rule 3 is triggered. Stop writing immediately.
             """
             try:
                 res = client.chat.completions.create(
