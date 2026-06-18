@@ -50,7 +50,10 @@ if st.button("Generate Predictive PSC Checklist", type="primary", use_container_
         3. Cite the relevant SOLAS or MARPOL regulation.
         4. Provide an immediate "Corrective Action".
         5. Keep it highly technical. Use severity warnings.
+        6. ZERO HALLUCINATION POLICY: If you are not 100% certain of the exact IMO, SOLAS, or MARPOL regulation number, do NOT guess or invent one. 
+        7. If you do not know the exact citation, you must explicitly state: "Exact regulation code not found in offline knowledge base. Consult vessel SMS."
         """
+
         user_prompt = "Generate the targeted pre-arrival audit checklist."
         
         try:
@@ -75,7 +78,12 @@ doc_text = st.text_area("Paste SMS Segment / Operational Text here:", height=100
 if st.button("Audit Document against Target Port Criteria", use_container_width=True):
     if doc_text:
         with st.spinner("Auditing document against SOLAS/MARPOL frameworks..."):
-            sys_prompt = "You are a strict Maritime Auditor. Review the text for violations of MARPOL, SOLAS, or STCW. Highlight risks and suggest compliant corrections."
+            sys_prompt = """You are a strict Maritime Auditor. Review the text for violations of MARPOL, SOLAS, or STCW. 
+            RULES:
+            1. Highlight risks and suggest compliant corrections.
+            2. ZERO HALLUCINATION POLICY: Only cite regulation numbers if you are absolute certain they exist in official maritime frameworks. 
+            3. If you cannot verify the exact rule, do not invent one. Instead, explicitly state: 'Refer to official Flag State circulars for exact regulatory citation.'
+            """
             try:
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
