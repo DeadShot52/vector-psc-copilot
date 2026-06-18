@@ -127,6 +127,9 @@ IF A REAL REGULATION DOES EXIST:
                     temperature=0.0
                 )
                 st.markdown(res.choices[0].message.content)
+                st.markdown("---")
+                st.caption(f"🛡️ **Vector OS Verified** | © 2026 Vector Maritime Intelligence | Generated Audit ID: VCT-{hash(doc_text) % 1000000}")
+
         except Exception as e:
                 st.error(f"API Error: {str(e)}")
 else:
