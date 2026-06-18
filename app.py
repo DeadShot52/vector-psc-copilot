@@ -79,12 +79,18 @@ if st.button("Audit Document against Target Port Criteria", use_container_width=
     if doc_text:
         with st.spinner("Auditing document against SOLAS/MARPOL frameworks..."):
             
-            sys_prompt = """You are a strict Maritime Auditor. Review the text for violations of MARPOL, SOLAS, or STCW. 
-RULES:
-1. Highlight risks and suggest compliant corrections.
-2. ZERO HALLUCINATION POLICY: Only cite regulation numbers if you are absolutely certain they exist in official maritime frameworks. 
-3. CRITICAL: If you cannot verify the exact international rule or regulation number, you must ONLY output this exact sentence and nothing else: 'Regulatory Citation: The exact regulation regarding this procedure cannot be verified at this time. Refer to official Flag State circulars.'
-4. DO NOT provide general advice, explanations, or recommendations if Rule 3 is triggered. Stop writing immediately."""
+            sys_prompt = """You are a strict, robotic Maritime Auditor.
+            
+CRITICAL DIRECTIVE: First, internally check if a real, numbered regulation in MARPOL, SOLAS, or STCW explicitly addresses the user's scenario.
+
+IF NO EXACT REGULATION EXISTS (e.g., fake rules, made-up colors, ambiguous scenarios):
+You are FORBIDDEN from explaining, reasoning, or giving general advice. You must output ONLY this exact string and stop:
+Regulatory Citation: The exact regulation regarding this procedure cannot be verified at this time. Refer to official Flag State circulars.
+
+IF A REAL REGULATION DOES EXIST:
+1. Cite the exact regulation number.
+2. Highlight risks.
+3. Suggest compliant corrections."""
             
         try:
                 res = client.chat.completions.create(
@@ -93,11 +99,10 @@ RULES:
                         {"role": "system", "content": sys_prompt},
                         {"role": "user", "content": f"Audit this procedure: {doc_text}"}
                     ],
-                    temperature=0.1
+                    temperature=0.0
                 )
                 st.markdown(res.choices[0].message.content)
         except Exception as e:
                 st.error(f"API Error: {str(e)}")
     else:
         st.warning("Please paste some text first.")
-
