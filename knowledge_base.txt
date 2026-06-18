@@ -1,0 +1,5 @@
+MARPOL Annex I deals with the prevention of pollution by oil. It strictly applies to Oil Tankers. It requires double-hull construction for oil tankers under Regulation 13G. Bulk Carriers do not carry oil as cargo and do not fall under Annex I cargo regulations.
+
+For Bulk Carriers, Port State Control (AMSA and Paris MoU) strictly targets structural integrity, specifically hatch cover watertightness, cargo hold corrosion, and the International Maritime Solid Bulk Cargoes (IMSBC) Code.
+
+Fire safety on Container Ships is highly scrutinized under SOLAS Chapter II-2. Inspectors specifically target sluggish fire doors, compromised fire dampers, and emergency fire pumps failing to pressurize to the required standard.
