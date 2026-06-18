@@ -45,13 +45,12 @@ if st.button("Generate Predictive PSC Checklist", type="primary", use_container_
 Predict the top 3 most likely Port State Control (PSC) deficiencies for a {vessel_age}-year-old {vessel_type} arriving in {destination_port} jurisdiction.
 
 RULES:
-1. Base predictions on high-risk areas: ISM Code (15150), Fire Safety (07115), and Life-Saving Appliances (11101).
+1. DYNAMIC ANALYSIS: Do not use generic answers. Identify the top 3 statistically most likely detainable deficiencies for this EXACT vessel age, type, and destination based on historical PSC data (e.g., AMSA targets older bulkers for structural issues; USCG targets MARPOL Annex VI compliance, etc.).
 2. Format strictly as a checklist.
 3. Cite the relevant SOLAS or MARPOL regulation.
 4. Provide an immediate "Corrective Action".
-5. Keep it highly technical. Use severity warnings.
-6. ZERO HALLUCINATION POLICY: If you are not 100% certain of the exact IMO, SOLAS, or MARPOL regulation number, do NOT guess or invent one. 
-7. If you do not know the exact citation, you must explicitly state: "Exact regulation code not found in offline knowledge base. Consult vessel SMS."
+5. ZERO HALLUCINATION POLICY: If you are not 100% certain of the exact regulation number, do NOT guess.
+6. At the very end of your response, write a "💡 Vector Intelligence Insight:" summarizing the biggest risk trend for this specific port authority.
 """
 
         user_prompt = "Generate the targeted pre-arrival audit checklist."
@@ -67,42 +66,7 @@ RULES:
             )
             st.warning(f"⚠️ HIGH RISK PROFILE DETECTED FOR {destination_port}")
             st.markdown(response.choices[0].message.content)
-            st.info("💡 Vector Intelligence: 80% of vessels matching this profile were detained for ISM Code violations in the last 12 months. Verify SMS implementation immediately.")
         except Exception as e:
             st.error(f"API Error: {str(e)}")
-
-st.markdown("---")
-st.subheader("3. SMS Verification Mode")
-doc_text = st.text_area("Paste SMS Segment / Operational Text here:", height=100, placeholder="e.g., Chief Engineer instructions for testing the emergency fire pump...")
-
-if st.button("Audit Document against Target Port Criteria", use_container_width=True):
-    if doc_text:
-        with st.spinner("Auditing document against SOLAS/MARPOL frameworks..."):
-            
-            sys_prompt = """You are a strict, robotic Maritime Auditor.
-            
-CRITICAL DIRECTIVE: First, internally check if a real, numbered regulation in MARPOL, SOLAS, or STCW explicitly addresses the user's scenario.
-
-IF NO EXACT REGULATION EXISTS (e.g., fake rules, made-up colors, ambiguous scenarios):
-You are FORBIDDEN from explaining, reasoning, or giving general advice. You must output ONLY this exact string and stop:
-Regulatory Citation: The exact regulation regarding this procedure cannot be verified at this time. Refer to official Flag State circulars.
-
-IF A REAL REGULATION DOES EXIST:
-1. Cite the exact regulation number.
-2. Highlight risks.
-3. Suggest compliant corrections."""
-            
-        try:
-                res = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": sys_prompt},
-                        {"role": "user", "content": f"Audit this procedure: {doc_text}"}
-                    ],
-                    temperature=0.0
-                )
-                st.markdown(res.choices[0].message.content)
-        except Exception as e:
-                st.error(f"API Error: {str(e)}")
     else:
         st.warning("Please paste some text first.")
