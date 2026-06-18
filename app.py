@@ -86,7 +86,7 @@ RULES:
 3. CRITICAL: If you cannot verify the exact international rule or regulation number, you must ONLY output this exact sentence and nothing else: 'Regulatory Citation: The exact regulation regarding this procedure cannot be verified at this time. Refer to official Flag State circulars.'
 4. DO NOT provide general advice, explanations, or recommendations if Rule 3 is triggered. Stop writing immediately."""
             
-            try:
+        try:
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[
@@ -96,29 +96,8 @@ RULES:
                     temperature=0.1
                 )
                 st.markdown(res.choices[0].message.content)
-            except Exception as e:
+        except Exception as e:
                 st.error(f"API Error: {str(e)}")
     else:
         st.warning("Please paste some text first.")
 
-            RULES:
-            1. Highlight risks and suggest compliant corrections.
-            2. ZERO HALLUCINATION POLICY: Only cite regulation numbers if you are absolutely certain they exist in official maritime frameworks. 
-            3. CRITICAL: If you cannot verify the exact international rule or regulation number, you must ONLY output this exact sentence and nothing else: 
-               'Regulatory Citation: The exact regulation regarding this procedure cannot be verified at this time. Refer to official Flag State circulars.'
-            4. DO NOT provide general advice, explanations, or recommendations if Rule 3 is triggered. Stop writing immediately.
-            """
-            try:
-                res = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": sys_prompt},
-                        {"role": "user", "content": f"Audit this procedure: {doc_text}"}
-                    ],
-                    temperature=0.1
-                )
-                st.markdown(res.choices[0].message.content)
-            except Exception as e:
-                st.error(f"API Error: {str(e)}")
-    else:
-        st.warning("Please paste some text first.")
