@@ -68,5 +68,5 @@ RULES:
             st.markdown(response.choices[0].message.content)
         except Exception as e:
             st.error(f"API Error: {str(e)}")
-    else:
+else:
         st.warning("Please paste some text first.")
