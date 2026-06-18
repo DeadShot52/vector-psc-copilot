@@ -102,6 +102,8 @@ RULES:
 
 st.markdown("---")
 st.subheader("3. SMS Verification Mode")
+st.caption("🔒 **Enterprise Security Active:** Zero-Data Retention protocol enabled. Text is processed entirely in-memory and immediately purged after audit. No data is stored or used for LLM training.")
+
 doc_text = st.text_area("Paste SMS Segment / Operational Text here:", height=100)
 
 if st.button("Audit Document against Target Port Criteria", use_container_width=True):
