@@ -1,4 +1,3 @@
 streamlit
 groq
-chromadb
-protobuf<4.0.0
+pinecone-client
