@@ -1,10 +1,10 @@
 import streamlit as st
 from groq import Groq
-import chromadb
-import os
+from pinecone import Pinecone
+import uuid
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Vector PSC Copilot", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Vector PSC Copilot", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -17,32 +17,48 @@ st.markdown("""
 # --- API INITIALIZATION ---
 try:
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-except Exception:
-    st.error("SYSTEM OFFLINE: Groq API Key missing.")
+    pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
+    index = pc.Index("vector-maritime")
+except Exception as e:
+    st.error(f"SYSTEM OFFLINE: API Keys missing or invalid. {str(e)}")
     st.stop()
 
-# --- RAG DATABASE SETUP (CHROMA DB) ---
-# 1. Start the database engine
-chroma_client = chromadb.Client()
-
-# 2. Create a digital filing cabinet named "maritime_rules"
-collection = chroma_client.get_or_create_collection(name="maritime_rules")
-
-# 3. Read our rulebook file
-try:
-    with open("knowledge_base.txt", "r") as file:
-        kb_text = file.read()
-        # Chop the text into separate paragraphs
-        documents = kb_text.split("\n\n")
-        ids = [str(i) for i in range(len(documents))]
-        # Load the paragraphs into the database
-        collection.add(documents=documents, ids=ids)
-except Exception:
-    st.error("Knowledge Base file not found. Please create knowledge_base.txt.")
+# --- SECRET ADMIN PANEL (SIDEBAR) ---
+with st.sidebar:
+    st.header("🛠️ Admin Data Ingestion")
+    st.caption("Upload Maritime Rules permanently to Pinecone Cloud.")
+    new_rule = st.text_area("Paste rule text here:", height=200)
+    
+    if st.button("Push to Cloud Database", type="primary", use_container_width=True):
+        if new_rule:
+            with st.spinner("Uploading to Pinecone..."):
+                try:
+                    # Convert text to 1024-dimensions using Pinecone Inference
+                    embedding = pc.inference.embed(
+                        model="multilingual-e5-large",
+                        inputs=[new_rule],
+                        parameters={"input_type": "passage", "truncate": "END"}
+                    )
+                    
+                    rule_id = "rule-" + str(uuid.uuid4())[:8]
+                    
+                    # Push to cloud
+                    index.upsert(
+                        vectors=[{
+                            "id": rule_id,
+                            "values": embedding[0].values,
+                            "metadata": {"text": new_rule}
+                        }]
+                    )
+                    st.success("✅ Rule permanently ingested!")
+                except Exception as e:
+                    st.error(f"Upload failed: {str(e)}")
+        else:
+            st.warning("Paste some text first.")
 
 # --- MAIN DASHBOARD ---
 st.title("⚓ VECTOR PSC COPILOT")
-st.markdown("Predictive Detention Intelligence for Port State Control. Powered by Vector RAG Engine.")
+st.markdown("Predictive Detention Intelligence for Port State Control. Powered by Pinecone Cloud RAG.")
 st.markdown("---")
 
 st.subheader("1. Vessel Profile Configuration")
@@ -59,15 +75,31 @@ st.markdown("---")
 st.subheader("2. Pre-Arrival PSC Risk Predictor")
 
 if st.button("Generate Predictive PSC Checklist", type="primary", use_container_width=True):
-    with st.spinner("Searching proprietary Vector Database and analyzing risks..."):
+    with st.spinner("Searching Pinecone Cloud Database..."):
         
-        # --- THE MAGIC RAG SEARCH ---
-        # Ask the database to find the most relevant rules for this specific ship
         search_query = f"What are the inspection targets and rules for a {vessel_type} in {destination_port}?"
-        db_results = collection.query(query_texts=[search_query], n_results=1)
-        retrieved_context = db_results['documents'][0][0] # Get the best matching paragraph
+        
+        try:
+            # 1. Map the search query
+            query_embedding = pc.inference.embed(
+                model="multilingual-e5-large",
+                inputs=[search_query],
+                parameters={"input_type": "query"}
+            )
+            
+            # 2. Search Pinecone
+            db_results = index.query(
+                vector=query_embedding[0].values,
+                top_k=1,
+                include_metadata=True
+            )
+            
+            if db_results['matches']:
+                retrieved_context = db_results['matches'][0]['metadata']['text']
+            else:
+                retrieved_context = "No specific rules found in database. Consult standard SMS."
 
-        system_prompt = f"""You are the Vector PSC Predictive Intelligence Engine. 
+            system_prompt = f"""You are the Vector PSC Predictive Intelligence Engine. 
 Predict the top 3 most likely Port State Control (PSC) deficiencies for a {vessel_age}-year-old {vessel_type} arriving in {destination_port}.
 
 CRITICAL RULE: You must base your predictions strictly on the following retrieved database context. Do not use outside memory.
@@ -81,7 +113,6 @@ RULES:
 3. ZERO HALLUCINATION POLICY: Do not invent rules outside of the provided context.
 """
 
-    try:
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
@@ -90,20 +121,18 @@ RULES:
                 ],
                 temperature=0.0
             )
-            st.success("Data retrieved from Vector Database.")
+            st.success("Data successfully retrieved from Pinecone.")
             st.markdown(response.choices[0].message.content)
             
-            # Show the user exactly what the database found to build trust
             with st.expander("View Retrieved Database Context"):
                 st.write(retrieved_context)
                 
-    except Exception as e:
+        except Exception as e:
             st.error(f"API Error: {str(e)}")
 
 st.markdown("---")
 st.subheader("3. SMS Verification Mode")
 st.caption("🔒 **Enterprise Security Active:** Zero-Data Retention protocol enabled. Text is processed entirely in-memory and immediately purged after audit. No data is stored or used for LLM training.")
-
 doc_text = st.text_area("Paste SMS Segment / Operational Text here:", height=100)
 
 if st.button("Audit Document against Target Port Criteria", use_container_width=True):
@@ -117,7 +146,7 @@ IF A REAL REGULATION DOES EXIST:
 1. Cite the exact regulation number.
 2. Highlight risks.
 3. Suggest compliant corrections."""
-        try:
+            try:
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[
@@ -129,8 +158,7 @@ IF A REAL REGULATION DOES EXIST:
                 st.markdown(res.choices[0].message.content)
                 st.markdown("---")
                 st.caption(f"🛡️ **Vector OS Verified** | © 2026 Vector Maritime Intelligence | Generated Audit ID: VCT-{hash(doc_text) % 1000000}")
-
-        except Exception as e:
+            except Exception as e:
                 st.error(f"API Error: {str(e)}")
-else:
+    else:
         st.warning("Please paste some text first.")
