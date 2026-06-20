@@ -2,6 +2,7 @@ import streamlit as st
 from groq import Groq
 from pinecone import Pinecone
 import uuid
+import PyPDF2
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Vector PSC Copilot", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
@@ -25,36 +26,62 @@ except Exception as e:
 
 # --- SECRET ADMIN PANEL (SIDEBAR) ---
 with st.sidebar:
-    st.header("🛠️ Admin Data Ingestion")
-    st.caption("Upload Maritime Rules permanently to Pinecone Cloud.")
-    new_rule = st.text_area("Paste rule text here:", height=200)
+    st.header("🛠️ Admin Data Pipeline")
+    st.caption("Upload full Maritime PDFs. The engine will auto-chunk and push to Pinecone Cloud.")
     
-    if st.button("Push to Cloud Database", type="primary", use_container_width=True):
-        if new_rule:
-            with st.spinner("Uploading to Pinecone..."):
+    uploaded_file = st.file_uploader("Upload Rulebook (PDF)", type="pdf")
+    
+    if st.button("Process & Upload PDF", type="primary", use_container_width=True):
+        if uploaded_file is not None:
+            with st.spinner("Initializing automated PDF pipeline..."):
                 try:
-                    # Convert text to 1024-dimensions using Pinecone Inference
-                    embedding = pc.inference.embed(
-                        model="multilingual-e5-large",
-                        inputs=[new_rule],
-                        parameters={"input_type": "passage", "truncate": "END"}
-                    )
+                    # 1. Read the PDF
+                    pdf_reader = PyPDF2.PdfReader(uploaded_file)
+                    full_text = ""
+                    for page in pdf_reader.pages:
+                        extracted = page.extract_text()
+                        if extracted:
+                            full_text += extracted + "\n\n"
                     
-                    rule_id = "rule-" + str(uuid.uuid4())[:8]
+                    # 2. Chunk the text (1000 characters per chunk)
+                    chunk_size = 1000
+                    chunks = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
                     
-                    # Push to cloud
-                    index.upsert(
-                        vectors=[{
-                            "id": rule_id,
-                            "values": embedding[0].values,
-                            "metadata": {"text": new_rule}
-                        }]
-                    )
-                    st.success("✅ Rule permanently ingested!")
+                    # 3. Setup Progress Bar
+                    progress_bar = st.progress(0)
+                    total_chunks = len(chunks)
+                    
+                    # 4. Process and Upload Chunks
+                    for i, chunk in enumerate(chunks):
+                        if len(chunk.strip()) < 50: # Skip empty or tiny chunks
+                            continue
+                            
+                        # Convert to math
+                        embedding = pc.inference.embed(
+                            model="multilingual-e5-large",
+                            inputs=[chunk],
+                            parameters={"input_type": "passage", "truncate": "END"}
+                        )
+                        
+                        rule_id = f"pdf-chunk-{str(uuid.uuid4())[:8]}"
+                        
+                        # Fire into cloud
+                        index.upsert(
+                            vectors=[{
+                                "id": rule_id,
+                                "values": embedding[0].values,
+                                "metadata": {"text": chunk}
+                            }]
+                        )
+                        
+                        # Update visual progress bar
+                        progress_bar.progress((i + 1) / total_chunks)
+                        
+                    st.success(f"✅ Pipeline Complete! {total_chunks} paragraphs permanently ingested into Pinecone.")
                 except Exception as e:
-                    st.error(f"Upload failed: {str(e)}")
+                    st.error(f"Pipeline Failure: {str(e)}")
         else:
-            st.warning("Paste some text first.")
+            st.warning("Please upload a PDF file first.")
 
 # --- MAIN DASHBOARD ---
 st.title("⚓ VECTOR PSC COPILOT")
@@ -80,14 +107,12 @@ if st.button("Generate Predictive PSC Checklist", type="primary", use_container_
         search_query = f"What are the inspection targets and rules for a {vessel_type} in {destination_port}?"
         
         try:
-            # 1. Map the search query
             query_embedding = pc.inference.embed(
                 model="multilingual-e5-large",
                 inputs=[search_query],
                 parameters={"input_type": "query"}
             )
             
-            # 2. Search Pinecone
             db_results = index.query(
                 vector=query_embedding[0].values,
                 top_k=1,
