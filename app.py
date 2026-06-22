@@ -4,14 +4,46 @@ from pinecone import Pinecone
 import uuid
 import PyPDF2
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Vector PSC Copilot", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
+# --- CONFIGURATION & 3D UI ---
+st.set_page_config(page_title="Vector OS | Intelligence", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
-    .main { background-color: #0E1117; }
-    h1, h2, h3 { color: #E63946 !important; font-family: 'Courier New', Courier, monospace; }
-    .stAlert { border-left: 4px solid #E63946; }
+    /* Vector OS Futuristic Dark Theme */
+    .main { background-color: #0A0E17; color: #E0E6ED; }
+    h1, h2, h3 { color: #00F2FE !important; font-family: 'Courier New', Courier, monospace; letter-spacing: 1.5px; text-shadow: 0 0 10px rgba(0, 242, 254, 0.4); }
+    
+    /* 3D Glassmorphism Cards & Shadows */
+    div[data-testid="stExpander"], div.stTextArea>div>div {
+        background: linear-gradient(145deg, #111827, #0d121c) !important;
+        border: 1px solid #1f2937 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+    }
+    
+    /* Neon Cyber Buttons */
+    .stButton>button {
+        background: linear-gradient(90deg, #E63946, #9b2226);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(230, 57, 70, 0.8);
+        border: 1px solid #ff4d4d;
+    }
+    
+    /* Inputs */
+    .stTextInput>div>div>input, .stSelectbox>div>div>div {
+        background-color: #111827 !important;
+        color: #00F2FE !important;
+        border: 1px solid #374151 !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+    }
+    .stAlert { background-color: rgba(230, 57, 70, 0.1); border-left: 4px solid #E63946; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -35,7 +67,6 @@ with st.sidebar:
         if uploaded_file is not None:
             with st.spinner("Initializing automated PDF pipeline..."):
                 try:
-                    # 1. Read the PDF
                     pdf_reader = PyPDF2.PdfReader(uploaded_file)
                     full_text = ""
                     for page in pdf_reader.pages:
@@ -43,20 +74,16 @@ with st.sidebar:
                         if extracted:
                             full_text += extracted + "\n\n"
                     
-                    # 2. Chunk the text (1000 characters per chunk)
                     chunk_size = 1000
                     chunks = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
                     
-                    # 3. Setup Progress Bar
                     progress_bar = st.progress(0)
                     total_chunks = len(chunks)
                     
-                    # 4. Process and Upload Chunks
                     for i, chunk in enumerate(chunks):
-                        if len(chunk.strip()) < 50: # Skip empty or tiny chunks
+                        if len(chunk.strip()) < 50: 
                             continue
                             
-                        # Convert to math
                         embedding = pc.inference.embed(
                             model="multilingual-e5-large",
                             inputs=[chunk],
@@ -65,7 +92,6 @@ with st.sidebar:
                         
                         rule_id = f"pdf-chunk-{str(uuid.uuid4())[:8]}"
                         
-                        # Fire into cloud
                         index.upsert(
                             vectors=[{
                                 "id": rule_id,
@@ -73,8 +99,6 @@ with st.sidebar:
                                 "metadata": {"text": chunk}
                             }]
                         )
-                        
-                        # Update visual progress bar
                         progress_bar.progress((i + 1) / total_chunks)
                         
                     st.success(f"✅ Pipeline Complete! {total_chunks} paragraphs permanently ingested into Pinecone.")
@@ -84,7 +108,7 @@ with st.sidebar:
             st.warning("Please upload a PDF file first.")
 
 # --- MAIN DASHBOARD ---
-st.title("⚓ VECTOR PSC COPILOT")
+st.title("⚓ VECTOR OS: MARITIME INTELLIGENCE")
 st.markdown("Predictive Detention Intelligence for Port State Control. Powered by Pinecone Cloud RAG.")
 st.markdown("---")
 
@@ -102,7 +126,7 @@ st.markdown("---")
 st.subheader("2. Pre-Arrival PSC Risk Predictor")
 
 if st.button("Generate Predictive PSC Checklist", type="primary", use_container_width=True):
-    with st.spinner("Searching Pinecone Cloud Database..."):
+    with st.spinner("Searching Vector OS Databanks..."):
         
         search_query = f"What are the inspection targets and rules for a {vessel_type} in {destination_port}?"
         
@@ -113,18 +137,21 @@ if st.button("Generate Predictive PSC Checklist", type="primary", use_container_
                 parameters={"input_type": "query"}
             )
             
+            # UPGRADED: Now pulls top 3 chunks instead of just 1
             db_results = index.query(
                 vector=query_embedding[0].values,
-                top_k=1,
+                top_k=3,
                 include_metadata=True
             )
             
             if db_results['matches']:
-                retrieved_context = db_results['matches'][0]['metadata']['text']
+                # Combines the multiple chunks into one solid context base
+                contexts = [match['metadata']['text'] for match in db_results['matches']]
+                retrieved_context = "\n\n---\n\n".join(contexts)
             else:
                 retrieved_context = "No specific rules found in database. Consult standard SMS."
 
-            system_prompt = f"""You are the Vector PSC Predictive Intelligence Engine. 
+            system_prompt = f"""You are the Vector OS Predictive Intelligence Engine. 
 Predict the top 3 most likely Port State Control (PSC) deficiencies for a {vessel_age}-year-old {vessel_type} arriving in {destination_port}.
 
 CRITICAL RULE: You must base your predictions strictly on the following retrieved database context. Do not use outside memory.
@@ -146,7 +173,7 @@ RULES:
                 ],
                 temperature=0.0
             )
-            st.success("Data successfully retrieved from Pinecone.")
+            st.success("Data successfully retrieved from Vector Cloud.")
             st.markdown(response.choices[0].message.content)
             
             with st.expander("View Retrieved Database Context"):
