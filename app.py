@@ -9,11 +9,9 @@ st.set_page_config(page_title="Vector OS | Intelligence", page_icon="⚓", layou
 
 st.markdown("""
     <style>
-    /* Vector OS Futuristic Dark Theme */
     .main { background-color: #0A0E17; color: #E0E6ED; }
     h1, h2, h3 { color: #00F2FE !important; font-family: 'Courier New', Courier, monospace; letter-spacing: 1.5px; text-shadow: 0 0 10px rgba(0, 242, 254, 0.4); }
     
-    /* 3D Glassmorphism Cards & Shadows */
     div[data-testid="stExpander"], div.stTextArea>div>div {
         background: linear-gradient(145deg, #111827, #0d121c) !important;
         border: 1px solid #1f2937 !important;
@@ -21,7 +19,6 @@ st.markdown("""
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
     }
     
-    /* Neon Cyber Buttons */
     .stButton>button {
         background: linear-gradient(90deg, #E63946, #9b2226);
         color: white;
@@ -36,7 +33,6 @@ st.markdown("""
         border: 1px solid #ff4d4d;
     }
     
-    /* Inputs */
     .stTextInput>div>div>input, .stSelectbox>div>div>div {
         background-color: #111827 !important;
         color: #00F2FE !important;
@@ -56,16 +52,17 @@ except Exception as e:
     st.error(f"SYSTEM OFFLINE: API Keys missing or invalid. {str(e)}")
     st.stop()
 
-# --- SECRET ADMIN PANEL (SIDEBAR) ---
+# --- SIDEBAR: PIPELINE CONTEXT DATA ---
 with st.sidebar:
-    st.header("🛠️ Admin Data Pipeline")
-    st.caption("Upload full Maritime PDFs. The engine will auto-chunk and push to Pinecone Cloud.")
+    st.header("🛠️ Data Pipeline")
+    st.caption("Upload regulatory PDFs. Select the Authority tag to prevent cross-contamination.")
     
+    doc_source = st.selectbox("Document Authority Tag", ["USCG", "ABS", "Paris MoU", "General Compliance"])
     uploaded_file = st.file_uploader("Upload Rulebook (PDF)", type="pdf")
     
     if st.button("Process & Upload PDF", type="primary", use_container_width=True):
         if uploaded_file is not None:
-            with st.spinner("Initializing automated PDF pipeline..."):
+            with st.spinner("Executing secure chunking pipeline..."):
                 try:
                     pdf_reader = PyPDF2.PdfReader(uploaded_file)
                     full_text = ""
@@ -90,18 +87,18 @@ with st.sidebar:
                             parameters={"input_type": "passage", "truncate": "END"}
                         )
                         
-                        rule_id = f"pdf-chunk-{str(uuid.uuid4())[:8]}"
+                        rule_id = f"pdf-{doc_source.lower()}-{str(uuid.uuid4())[:8]}"
                         
                         index.upsert(
                             vectors=[{
                                 "id": rule_id,
                                 "values": embedding[0].values,
-                                "metadata": {"text": chunk}
+                                "metadata": {"text": chunk, "source": doc_source}
                             }]
                         )
                         progress_bar.progress((i + 1) / total_chunks)
                         
-                    st.success(f"✅ Pipeline Complete! {total_chunks} paragraphs permanently ingested into Pinecone.")
+                    st.success(f"✅ Securely ingested {total_chunks} blocks tagged under [{doc_source}].")
                 except Exception as e:
                     st.error(f"Pipeline Failure: {str(e)}")
         else:
@@ -109,7 +106,7 @@ with st.sidebar:
 
 # --- MAIN DASHBOARD ---
 st.title("⚓ VECTOR OS: MARITIME INTELLIGENCE")
-st.markdown("Predictive Detention Intelligence for Port State Control. Powered by Pinecone Cloud RAG.")
+st.markdown("Predictive Detention Intelligence for Port State Control. Powered by Cloud Vector RAG.")
 st.markdown("---")
 
 st.subheader("1. Vessel Profile Configuration")
@@ -126,9 +123,10 @@ st.markdown("---")
 st.subheader("2. Pre-Arrival PSC Risk Predictor")
 
 if st.button("Generate Predictive PSC Checklist", type="primary", use_container_width=True):
-    with st.spinner("Searching Vector OS Databanks..."):
-        
-        search_query = f"What are the inspection targets and rules for a {vessel_type} in {destination_port}?"
+    with st.spinner("Scanning Target Vector Space..."):
+        # Explicit target calculation based on selection
+        target_tag = "USCG" if "USCG" in destination_port else "Paris MoU" if "Paris" in destination_port else "ABS"
+        search_query = f"What are the inspection targets, deficiencies, and rules for {target_tag}?"
         
         try:
             query_embedding = pc.inference.embed(
@@ -137,68 +135,76 @@ if st.button("Generate Predictive PSC Checklist", type="primary", use_container_
                 parameters={"input_type": "query"}
             )
             
-            # UPGRADED: Now pulls top 3 chunks instead of just 1
             db_results = index.query(
                 vector=query_embedding[0].values,
-                top_k=3,
+                top_k=4,
                 include_metadata=True
             )
             
             if db_results['matches']:
-                # Combines the multiple chunks into one solid context base
                 contexts = [match['metadata']['text'] for match in db_results['matches']]
                 retrieved_context = "\n\n---\n\n".join(contexts)
             else:
-                retrieved_context = "No specific rules found in database. Consult standard SMS."
+                retrieved_context = "Standard core compliance frameworks active."
 
             system_prompt = f"""You are the Vector OS Predictive Intelligence Engine. 
-Predict the top 3 most likely Port State Control (PSC) deficiencies for a {vessel_age}-year-old {vessel_type} arriving in {destination_port}.
+Predict the top 3 high-risk Port State Control (PSC) deficiencies for a {vessel_age}-year-old {vessel_type} arriving under {destination_port} jurisdiction.
 
-CRITICAL RULE: You must base your predictions strictly on the following retrieved database context. Do not use outside memory.
+CRITICAL RULE: Rely heavily on the provided database context to formulate real, concrete targeting trends.
 
 RETRIEVED DATABASE CONTEXT:
 "{retrieved_context}"
-
-RULES:
-1. Format strictly as a checklist.
-2. Provide an immediate "Corrective Action".
-3. ZERO HALLUCINATION POLICY: Do not invent rules outside of the provided context.
 """
 
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": "Generate the targeted pre-arrival audit checklist."}
+                    {"role": "user", "content": "Generate targeted pre-arrival audit matrix."}
                 ],
-                temperature=0.0
+                temperature=0.2
             )
-            st.success("Data successfully retrieved from Vector Cloud.")
+            st.success("Target context locked.")
             st.markdown(response.choices[0].message.content)
-            
-            with st.expander("View Retrieved Database Context"):
-                st.write(retrieved_context)
                 
         except Exception as e:
-            st.error(f"API Error: {str(e)}")
+            st.error(f"API Interface Error: {str(e)}")
 
 st.markdown("---")
-st.subheader("3. SMS Verification Mode")
-st.caption("🔒 **Enterprise Security Active:** Zero-Data Retention protocol enabled. Text is processed entirely in-memory and immediately purged after audit. No data is stored or used for LLM training.")
-doc_text = st.text_area("Paste SMS Segment / Operational Text here:", height=100)
+st.subheader("3. SMS Verification Mode (Fortified)")
+st.caption("🔒 **Zero-Retention Contextual Audit:** Input text is mapped directly to uploaded database vectors to cross-examine legality.")
+doc_text = st.text_area("Paste SMS Segment / Operational Text here:", height=120)
 
 if st.button("Audit Document against Target Port Criteria", use_container_width=True):
     if doc_text:
-        with st.spinner("Auditing document..."):
-            sys_prompt = """You are a strict, robotic Maritime Auditor.
-CRITICAL DIRECTIVE: Check if a real regulation explicitly addresses the user's scenario.
-IF NO EXACT REGULATION EXISTS: Output ONLY this exact string and stop:
-Regulatory Citation: The exact regulation regarding this procedure cannot be verified at this time. Refer to official Flag State circulars.
-IF A REAL REGULATION DOES EXIST:
-1. Cite the exact regulation number.
-2. Highlight risks.
-3. Suggest compliant corrections."""
+        with st.spinner("Executing real-time vector cross-examination..."):
             try:
+                # FIXED: Section 3 now converts user input into a vector query
+                audit_embedding = pc.inference.embed(
+                    model="multilingual-e5-large",
+                    inputs=[doc_text],
+                    parameters={"input_type": "query"}
+                )
+                
+                audit_matches = index.query(
+                    vector=audit_embedding[0].values,
+                    top_k=3,
+                    include_metadata=True
+                )
+                
+                audit_context = "\n\n---\n\n".join([m['metadata']['text'] for m in audit_matches['matches']]) if audit_matches['matches'] else ""
+
+                sys_prompt = f"""You are a strict, non-hallucinating Maritime Safety Auditor.
+Evaluate the operational procedure submitted by the user. Cross-reference it directly against the verified regulatory knowledge base attached below.
+
+VERIFIED REGULATORY KNOWLEDGE BASE:
+\"\"\"{audit_context}\"\"\"
+
+OUTPUT REQUIREMENT:
+1. State clearly if the action is COMPLIANT or NON-COMPLIANT based on the text.
+2. Cite specific regulation structures or reference rules mentioned in the context.
+3. Provide the exact professional correction required to secure the ship from detention."""
+
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[
@@ -209,8 +215,8 @@ IF A REAL REGULATION DOES EXIST:
                 )
                 st.markdown(res.choices[0].message.content)
                 st.markdown("---")
-                st.caption(f"🛡️ **Vector OS Verified** | © 2026 Vector Maritime Intelligence | Generated Audit ID: VCT-{hash(doc_text) % 1000000}")
+                st.caption(f"🛡️ **Vector OS Secured** | Generation ID: VCT-{hash(doc_text) % 1000000}")
             except Exception as e:
-                st.error(f"API Error: {str(e)}")
+                st.error(f"Audit Pipeline Error: {str(e)}")
     else:
         st.warning("Please paste some text first.")
