@@ -4,6 +4,7 @@ from pinecone import Pinecone
 import uuid
 import PyPDF2
 from datetime import datetime, timedelta
+from twilio.rest import Client
 
 # --- CONFIGURATION & 3D UI ---
 st.set_page_config(page_title="Vector OS | Fleet Intelligence", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
@@ -173,7 +174,7 @@ with tab2:
                 st.error(str(e))
 
 # ==========================================
-# TAB 3: DECISION SIMULATOR (Meta & Grok)
+# TAB 3: DECISION SIMULATOR & EMERGENCY ALERTS
 # ==========================================
 with tab3:
     st.subheader("Detention Avoidance Simulator (What-If)")
@@ -198,6 +199,37 @@ with tab3:
         st.success("Target risk profile achieved. Vessel cleared for arrival.")
     else:
         st.warning("Vessel remains in high-risk detention bracket.")
+
+    st.markdown("---")
+    st.subheader("📱 Vector OS Outbound Notification Control")
+    st.caption("Broadcast instantaneous critical risk vectors directly to the DPA or Fleet Manager's mobile device via WhatsApp.")
+    
+    target_phone = st.text_input("Enter DPA Mobile Number (With Country Code):", placeholder="+91XXXXXXXXXX")
+    alert_payload = f"⚠️ VECTOR OS ALERT: High risk vessel threat detected. Simulated fleet risk score is currently critical at {new_risk}/100. Corrective field actions required immediately."
+
+    if st.button("Dispatch Urgent WhatsApp Notification", type="primary"):
+        if not target_phone:
+            st.warning("Please input a valid destination mobile number.")
+        else:
+            with st.spinner("Establishing secure handshake with telecommunications gateway..."):
+                try:
+                    # Pulling security credentials from your hidden Streamlit Secrets
+                    account_sid = st.secrets["TWILIO_ACCOUNT_SID"]
+                    auth_token = st.secrets["TWILIO_AUTH_TOKEN"]
+                    twilio_whatsapp_number = st.secrets["TWILIO_WHATSAPP_NUMBER"] # Typically 'whatsapp:+14155238886' for sandbox
+                    
+                    twilio_client = Client(account_sid, auth_token)
+                    
+                    message = twilio_client.messages.create(
+                        from_=f"whatsapp:{twilio_whatsapp_number}",
+                        body=alert_payload,
+                        to=f"whatsapp:{target_phone}"
+                    )
+                    st.success(f"🚀 Dispatch Successful! Message ID: {message.sid}")
+                except Exception as e:
+                    st.error(f"Handshake Failed: Credentials unconfigured in Secrets manager. Simulated Payload: '{alert_payload}'")
+
+
 
 # ==========================================
 # TAB 4: CIC & CERT ENGINE (Claude)
