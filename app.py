@@ -227,7 +227,7 @@ with tab3:
                     )
                     st.success(f"🚀 Dispatch Successful! Message ID: {message.sid}")
                 except Exception as e:
-                    st.error(f"Handshake Failed: Credentials unconfigured in Secrets manager. Simulated Payload: '{alert_payload}'")
+                    st.error(f"Handshake Interface Error: {str(e)}")
 
 
 
