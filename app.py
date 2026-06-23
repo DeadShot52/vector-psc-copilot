@@ -226,8 +226,8 @@ with tab3:
                         to=f"whatsapp:{target_phone}"
                     )
                     st.success(f"🚀 Dispatch Successful! Message ID: {message.sid}")
-                except Exception as e:
-                    st.error(f"Handshake Interface Error: {str(e)}")
+                 except Exception as e:
+                    st.error(f"Error: {str(e)} | Keys Streamlit can actually see: {list(st.secrets.keys())}")
 
 
 
