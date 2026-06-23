@@ -38,28 +38,40 @@ except Exception as e:
     st.error(f"SYSTEM OFFLINE: {str(e)}")
     st.stop()
 
-# --- SIDEBAR: FLYWHEEL & SECURITY (Meta & Grok) ---
-with st.sidebar:
-    st.header("🛡️ Enterprise Security")
-    air_gapped = st.toggle("Air-Gapped Mode (Zero Retention)", value=True)
-    if air_gapped:
-        st.caption("Active: Logs purged immediately after audit.")
-    
-    st.markdown("---")
-    st.header("🔄 Data Flywheel")
-    st.caption("Anonymously contribute past PSC reports to improve global fleet intelligence.")
-    flywheel_file = st.file_uploader("Upload Past PSC Report", type="pdf")
-    if st.button("Submit Anonymized Data"):
-        st.success("Data encrypted, anonymized, and injected into Vector OS swarm.")
+# --- INITIALIZE IN-MEMORY FLEET DATABASE ---
+if 'fleet' not in st.session_state:
+    # Starting baseline fleet data for a professional presentation
+    st.session_state['fleet'] = [
+        {"name": "Vector Horizon", "imo": 9412345, "risk": 22, "type": "Oil Tanker"},
+        {"name": "Vector Sovereign", "imo": 9654321, "risk": 74, "type": "Bulk Carrier"},
+        {"name": "Vector Voyager", "imo": 9881122, "risk": 41, "type": "Container Ship"}
+    ]
 
-# --- HEADER: FLEET DASHBOARD (ChatGPT) ---
+# --- DYNAMIC METRIC CALCULATIONS ---
+fleet_data = st.session_state['fleet']
+total_ships = len(fleet_data)
+
+# High Risk means a vessel has an individual risk score over 60
+high_risk_count = sum(1 for ship in fleet_data if ship['risk'] > 60)
+
+# Fleet Readiness is the inverse average risk of all combined vessels
+avg_fleet_risk = sum(ship['risk'] for ship in fleet_data) / total_ships if total_ships > 0 else 0
+computed_readiness = int(100 - avg_fleet_risk)
+
+# Dynamic Threat Level threshold evaluation
+computed_threat = "CRITICAL" if high_risk_count >= 2 else "ELEVATED" if high_risk_count == 1 else "LOW RISK"
+
+# --- HEADER: FLEET DASHBOARD ---
 st.title("⚓ VECTOR OS: PREDICTIVE INTELLIGENCE")
+
 col_a, col_b, col_c, col_d = st.columns(4)
-col_a.metric("Fleet Readiness Score", "84/100", "+2.4%")
-col_b.metric("Global PSC Threat Level", "ELEVATED", "-")
-col_c.metric("Active CICs", "2", "MARPOL & Fire")
-col_d.metric("High-Risk Vessels", "3", "-1")
+col_a.metric("Fleet Readiness Score", f"{computed_readiness}/100", f"{'+1.2%' if computed_readiness > 80 else '-2.1%'}")
+col_b.metric("Global PSC Threat Level", computed_threat, "-")
+col_c.metric("Active Fleet Vessels", f"{total_ships} Ships", "Live")
+col_d.metric("High-Risk Vessels Detected", f"{high_risk_count}", f"+{high_risk_count}" if high_risk_count > 0 else "0")
+
 st.markdown("---")
+
 
 # --- CORE ARCHITECTURE TABS ---
 tab1, tab2, tab3, tab4 = st.tabs([
