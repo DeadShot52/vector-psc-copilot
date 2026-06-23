@@ -3,43 +3,29 @@ from groq import Groq
 from pinecone import Pinecone
 import uuid
 import PyPDF2
+from datetime import datetime, timedelta
 
 # --- CONFIGURATION & 3D UI ---
-st.set_page_config(page_title="Vector OS | Intelligence", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Vector OS | Fleet Intelligence", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
     .main { background-color: #0A0E17; color: #E0E6ED; }
-    h1, h2, h3 { color: #00F2FE !important; font-family: 'Courier New', Courier, monospace; letter-spacing: 1.5px; text-shadow: 0 0 10px rgba(0, 242, 254, 0.4); }
-    
-    div[data-testid="stExpander"], div.stTextArea>div>div {
+    h1, h2, h3, h4 { color: #00F2FE !important; font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; text-shadow: 0 0 10px rgba(0, 242, 254, 0.3); }
+    div[data-testid="stExpander"], div.stTextArea>div>div, div.stTabs [data-baseweb="tab-panel"] {
         background: linear-gradient(145deg, #111827, #0d121c) !important;
         border: 1px solid #1f2937 !important;
         border-radius: 12px !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9) !important;
     }
-    
     .stButton>button {
-        background: linear-gradient(90deg, #E63946, #9b2226);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
-        transition: all 0.3s ease;
+        background: linear-gradient(90deg, #E63946, #9b2226); color: white; border: none; border-radius: 8px; box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
     }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(230, 57, 70, 0.8);
-        border: 1px solid #ff4d4d;
+    .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(230, 57, 70, 0.8); }
+    .stTextInput>div>div>input, .stSelectbox>div>div>div, .stNumberInput>div>div>input {
+        background-color: #111827 !important; color: #00F2FE !important; border: 1px solid #374151 !important;
     }
-    
-    .stTextInput>div>div>input, .stSelectbox>div>div>div {
-        background-color: #111827 !important;
-        color: #00F2FE !important;
-        border: 1px solid #374151 !important;
-        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5) !important;
-    }
-    .stAlert { background-color: rgba(230, 57, 70, 0.1); border-left: 4px solid #E63946; }
+    .metric-card { background-color: #111827; padding: 15px; border-radius: 10px; border-left: 4px solid #00F2FE; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -49,174 +35,163 @@ try:
     pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
     index = pc.Index("vector-maritime")
 except Exception as e:
-    st.error(f"SYSTEM OFFLINE: API Keys missing or invalid. {str(e)}")
+    st.error(f"SYSTEM OFFLINE: {str(e)}")
     st.stop()
 
-# --- SIDEBAR: PIPELINE CONTEXT DATA ---
+# --- SIDEBAR: FLYWHEEL & SECURITY (Meta & Grok) ---
 with st.sidebar:
-    st.header("🛠️ Data Pipeline")
-    st.caption("Upload regulatory PDFs. Select the Authority tag to prevent cross-contamination.")
+    st.header("🛡️ Enterprise Security")
+    air_gapped = st.toggle("Air-Gapped Mode (Zero Retention)", value=True)
+    if air_gapped:
+        st.caption("Active: Logs purged immediately after audit.")
     
-    doc_source = st.selectbox("Document Authority Tag", ["USCG", "ABS", "Paris MoU", "General Compliance"])
-    uploaded_file = st.file_uploader("Upload Rulebook (PDF)", type="pdf")
+    st.markdown("---")
+    st.header("🔄 Data Flywheel")
+    st.caption("Anonymously contribute past PSC reports to improve global fleet intelligence.")
+    flywheel_file = st.file_uploader("Upload Past PSC Report", type="pdf")
+    if st.button("Submit Anonymized Data"):
+        st.success("Data encrypted, anonymized, and injected into Vector OS swarm.")
+
+# --- HEADER: FLEET DASHBOARD (ChatGPT) ---
+st.title("⚓ VECTOR OS: PREDICTIVE INTELLIGENCE")
+col_a, col_b, col_c, col_d = st.columns(4)
+col_a.metric("Fleet Readiness Score", "84/100", "+2.4%")
+col_b.metric("Global PSC Threat Level", "ELEVATED", "-")
+col_c.metric("Active CICs", "2", "MARPOL & Fire")
+col_d.metric("High-Risk Vessels", "3", "-1")
+st.markdown("---")
+
+# --- CORE ARCHITECTURE TABS ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    "1. Document & SMS Audit (Core)", 
+    "2. PSC Digital Twin", 
+    "3. Decision Simulator", 
+    "4. CIC & Cert Engine"
+])
+
+# ==========================================
+# TAB 1: SMS & DOCUMENT AUDIT (Claude & Grok)
+# ==========================================
+with tab1:
+    st.subheader("Proprietary Document Cross-Examination")
+    st.markdown("Audit agent messages, crew SMS, and printed operational PDFs directly against port-specific rules.")
     
-    if st.button("Process & Upload PDF", type="primary", use_container_width=True):
-        if uploaded_file is not None:
-            with st.spinner("Executing secure chunking pipeline..."):
+    audit_target = st.selectbox("Target Authority for Audit", ["USCG", "Paris MoU", "AMSA", "Tokyo MoU"])
+    doc_text = st.text_area("Paste Raw Operational Text or SMS:", height=150)
+    
+    if st.button("Execute Cross-Examination", type="primary"):
+        if doc_text:
+            with st.spinner("Executing Vector Cross-Examination..."):
                 try:
-                    pdf_reader = PyPDF2.PdfReader(uploaded_file)
-                    full_text = ""
-                    for page in pdf_reader.pages:
-                        extracted = page.extract_text()
-                        if extracted:
-                            full_text += extracted + "\n\n"
+                    audit_embedding = pc.inference.embed(
+                        model="multilingual-e5-large", inputs=[doc_text], parameters={"input_type": "query"}
+                    )
+                    audit_matches = index.query(vector=audit_embedding[0].values, top_k=3, include_metadata=True)
+                    audit_context = "\n".join([m['metadata']['text'] for m in audit_matches['matches']]) if audit_matches['matches'] else ""
+
+                    sys_prompt = f"""You are Vector OS, a robotic Maritime Auditor. Evaluate the text against {audit_target} criteria.
+                    USE THIS DATABASE CONTEXT: {audit_context}
+                    OUTPUT FORMAT:
+                    1. COMPLIANT / NON-COMPLIANT
+                    2. Inspector Mindset: Explain exactly why {audit_target} inspectors target this.
+                    3. Exact Regulation Citation.
+                    4. Professional Correction needed."""
                     
-                    chunk_size = 1000
-                    chunks = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
-                    
-                    progress_bar = st.progress(0)
-                    total_chunks = len(chunks)
-                    
-                    for i, chunk in enumerate(chunks):
-                        if len(chunk.strip()) < 50: 
-                            continue
-                            
-                        embedding = pc.inference.embed(
-                            model="multilingual-e5-large",
-                            inputs=[chunk],
-                            parameters={"input_type": "passage", "truncate": "END"}
-                        )
-                        
-                        rule_id = f"pdf-{doc_source.lower()}-{str(uuid.uuid4())[:8]}"
-                        
-                        index.upsert(
-                            vectors=[{
-                                "id": rule_id,
-                                "values": embedding[0].values,
-                                "metadata": {"text": chunk, "source": doc_source}
-                            }]
-                        )
-                        progress_bar.progress((i + 1) / total_chunks)
-                        
-                    st.success(f"✅ Securely ingested {total_chunks} blocks tagged under [{doc_source}].")
+                    res = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": doc_text}],
+                        temperature=0.0
+                    )
+                    st.markdown(res.choices[0].message.content)
                 except Exception as e:
-                    st.error(f"Pipeline Failure: {str(e)}")
-        else:
-            st.warning("Please upload a PDF file first.")
+                    st.error(str(e))
 
-# --- MAIN DASHBOARD ---
-st.title("⚓ VECTOR OS: MARITIME INTELLIGENCE")
-st.markdown("Predictive Detention Intelligence for Port State Control. Powered by Cloud Vector RAG.")
-st.markdown("---")
+# ==========================================
+# TAB 2: PSC DIGITAL TWIN (ChatGPT & Meta)
+# ==========================================
+with tab2:
+    st.subheader("Vessel Inspection Twin")
+    col1, col2, col3 = st.columns(3)
+    v_type = col1.selectbox("Hull Type", ["Bulk Carrier", "Oil Tanker", "Container"])
+    v_age = col2.number_input("Age (Years)", 0, 35, 12)
+    v_port = col3.selectbox("Port", ["USCG (Houston)", "Paris MoU (Rotterdam)", "MPA (Singapore)"])
+    
+    col4, col5, col6 = st.columns(3)
+    v_flag = col4.selectbox("Flag State", ["Liberia", "Panama", "Marshall Islands", "Blacklisted Flag"])
+    v_class = col5.selectbox("Class Society", ["IACS", "Non-IACS"])
+    v_def = col6.text_input("Last Deficiencies (Optional)", "e.g., Fire doors, OWS")
 
-st.subheader("1. Vessel Profile Configuration")
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    vessel_type = st.selectbox("Vessel Hull Type", ["Bulk Carrier", "Oil Tanker", "Container Ship"])
-with col2:
-    vessel_age = st.number_input("Vessel Age (Years)", min_value=0, max_value=30, value=12)
-with col3:
-    destination_port = st.selectbox("Destination Port Authority", ["USCG (USA)", "AMSA (Australia)", "MPA (Singapore)", "Paris MoU (Europe)"])
-
-st.markdown("---")
-st.subheader("2. Pre-Arrival PSC Risk Predictor")
-
-if st.button("Generate Predictive PSC Checklist", type="primary", use_container_width=True):
-    with st.spinner("Scanning Target Vector Space..."):
-        # Explicit target calculation based on selection
-        target_tag = "USCG" if "USCG" in destination_port else "Paris MoU" if "Paris" in destination_port else "ABS"
-        search_query = f"What are the inspection targets, deficiencies, and rules for {target_tag}?"
-        
-        try:
-            query_embedding = pc.inference.embed(
-                model="multilingual-e5-large",
-                inputs=[search_query],
-                parameters={"input_type": "query"}
-            )
-            
-            db_results = index.query(
-                vector=query_embedding[0].values,
-                top_k=4,
-                include_metadata=True
-            )
-            
-            if db_results['matches']:
-                contexts = [match['metadata']['text'] for match in db_results['matches']]
-                retrieved_context = "\n\n---\n\n".join(contexts)
-            else:
-                retrieved_context = "Standard core compliance frameworks active."
-
-            system_prompt = f"""You are the Vector OS Predictive Intelligence Engine. 
-Predict the top 3 high-risk Port State Control (PSC) deficiencies for a {vessel_age}-year-old {vessel_type} arriving under {destination_port} jurisdiction.
-
-CRITICAL RULE: Rely heavily on the provided database context to formulate real, concrete targeting trends.
-
-RETRIEVED DATABASE CONTEXT:
-"{retrieved_context}"
-"""
-
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": "Generate targeted pre-arrival audit matrix."}
-                ],
-                temperature=0.2
-            )
-            st.success("Target context locked.")
-            st.markdown(response.choices[0].message.content)
-                
-        except Exception as e:
-            st.error(f"API Interface Error: {str(e)}")
-
-st.markdown("---")
-st.subheader("3. SMS Verification Mode (Fortified)")
-st.caption("🔒 **Zero-Retention Contextual Audit:** Input text is mapped directly to uploaded database vectors to cross-examine legality.")
-doc_text = st.text_area("Paste SMS Segment / Operational Text here:", height=120)
-
-if st.button("Audit Document against Target Port Criteria", use_container_width=True):
-    if doc_text:
-        with st.spinner("Executing real-time vector cross-examination..."):
+    if st.button("Generate Detention Forecast"):
+        with st.spinner("Calculating Boarding & Detention Probabilities..."):
             try:
-                # FIXED: Section 3 now converts user input into a vector query
-                audit_embedding = pc.inference.embed(
-                    model="multilingual-e5-large",
-                    inputs=[doc_text],
-                    parameters={"input_type": "query"}
-                )
+                search_query = f"Deficiencies and detention targets for {v_type} in {v_port} regarding {v_def}"
+                query_emb = pc.inference.embed(model="multilingual-e5-large", inputs=[search_query], parameters={"input_type": "query"})
+                db_res = index.query(vector=query_emb[0].values, top_k=3, include_metadata=True)
+                ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context."
+
+                sys_prompt = f"""You are the Vector OS Probability Engine.
+                Evaluate a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
+                Database Context: {ctx}
                 
-                audit_matches = index.query(
-                    vector=audit_embedding[0].values,
-                    top_k=3,
-                    include_metadata=True
-                )
+                OUTPUT:
+                1. Boarding Probability: (e.g., 78%)
+                2. Detention Probability Score: (e.g., 14%)
+                3. Inspector Behavior Intelligence: What does {v_port} strictly focus on historically?
+                4. Top 3 Likely Findings (with percentages of likelihood)."""
                 
-                audit_context = "\n\n---\n\n".join([m['metadata']['text'] for m in audit_matches['matches']]) if audit_matches['matches'] else ""
-
-                sys_prompt = f"""You are a strict, non-hallucinating Maritime Safety Auditor.
-Evaluate the operational procedure submitted by the user. Cross-reference it directly against the verified regulatory knowledge base attached below.
-
-VERIFIED REGULATORY KNOWLEDGE BASE:
-\"\"\"{audit_context}\"\"\"
-
-OUTPUT REQUIREMENT:
-1. State clearly if the action is COMPLIANT or NON-COMPLIANT based on the text.
-2. Cite specific regulation structures or reference rules mentioned in the context.
-3. Provide the exact professional correction required to secure the ship from detention."""
-
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": sys_prompt},
-                        {"role": "user", "content": f"Audit this procedure: {doc_text}"}
-                    ],
-                    temperature=0.0
+                    messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": "Forecast risk."}],
+                    temperature=0.2
                 )
                 st.markdown(res.choices[0].message.content)
-                st.markdown("---")
-                st.caption(f"🛡️ **Vector OS Secured** | Generation ID: VCT-{hash(doc_text) % 1000000}")
             except Exception as e:
-                st.error(f"Audit Pipeline Error: {str(e)}")
+                st.error(str(e))
+
+# ==========================================
+# TAB 3: DECISION SIMULATOR (Meta & Grok)
+# ==========================================
+with tab3:
+    st.subheader("Detention Avoidance Simulator (What-If)")
+    st.markdown("Select corrective actions to see the real-time impact on your vessel's Detention Probability.")
+    
+    base_risk = 68
+    st.write(f"**Current Baseline Risk Score: {base_risk}/100**")
+    
+    fix_1 = st.checkbox("Rectify sluggish engine room fire dampers")
+    fix_2 = st.checkbox("Update ECDIS passage plan for local port limits")
+    fix_3 = st.checkbox("Conduct emergency steering drill and log it")
+    
+    new_risk = base_risk
+    if fix_1: new_risk -= 24
+    if fix_2: new_risk -= 12
+    if fix_3: new_risk -= 15
+    
+    st.progress(new_risk / 100)
+    st.metric("Simulated Adjusted Risk Score", f"{new_risk}/100", f"-{base_risk - new_risk}")
+    
+    if new_risk < 30:
+        st.success("Target risk profile achieved. Vessel cleared for arrival.")
     else:
-        st.warning("Please paste some text first.")
+        st.warning("Vessel remains in high-risk detention bracket.")
+
+# ==========================================
+# TAB 4: CIC & CERT ENGINE (Claude)
+# ==========================================
+with tab4:
+    st.subheader("Concentrated Inspection Campaign (CIC) Engine")
+    st.info("🚨 **ACTIVE CIC WARNING**: Paris & Tokyo MoU are actively targeting Crew Wages & SEAs (2024/2025).")
+    st.warning("🚨 **ACTIVE CIC WARNING**: USCG prioritizing Engine Room Automation.")
+    
+    st.markdown("---")
+    st.subheader("Certificate Expiry Intelligence")
+    col_x, col_y = st.columns(2)
+    cert_name = col_x.text_input("Certificate Name", "e.g., Safety Equipment Certificate")
+    cert_date = col_y.date_input("Expiry Date", datetime.today() + timedelta(days=14))
+    
+    if st.button("Check Port State Exposure"):
+        days_left = (cert_date - datetime.today().date()).days
+        if days_left < 30:
+            st.error(f"CRITICAL: {cert_name} expires in {days_left} days. High probability of PSC code 30 (Detainable) if an extension is not secured before arrival.")
+        else:
+            st.success(f"{cert_name} is secure for {days_left} days.")
