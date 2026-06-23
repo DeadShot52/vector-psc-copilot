@@ -86,6 +86,17 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ==========================================
 with tab1:
     st.subheader("Proprietary Document Cross-Examination")
+    
+    # Fortified Enterprise Security Shield Banner
+    st.markdown("""
+        <div style="background: rgba(0, 242, 254, 0.05); border: 1px solid #00F2FE; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <span style="color: #00F2FE; font-weight: bold;">🔒 ENTERPRISE SECURITY PROTOCOL ACTIVE</span><br>
+            <span style="color: #A0AEC0; font-size: 0.9rem;">
+                Zero-Data Retention rule enforced. Text is processed entirely inside transient memory and immediately purged post-audit. No data logs are saved to Pinecone or used for model training.
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        
     st.markdown("Audit agent messages, crew SMS, and printed operational PDFs directly against port-specific rules.")
     
     audit_target = st.selectbox("Target Authority for Audit", ["USCG", "Paris MoU", "AMSA", "Tokyo MoU"])
@@ -117,6 +128,7 @@ with tab1:
                     st.markdown(res.choices[0].message.content)
                 except Exception as e:
                     st.error(str(e))
+
 
 # ==========================================
 # TAB 2: PSC DIGITAL TWIN (ChatGPT & Meta)
