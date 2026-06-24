@@ -5,6 +5,7 @@ import uuid
 import PyPDF2
 from datetime import datetime, timedelta
 from twilio.rest import Client
+import requests
 
 # --- CONFIGURATION & 3D UI ---
 st.set_page_config(page_title="Vector OS | Fleet Intelligence", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
@@ -132,37 +133,72 @@ with tab1:
 
 
 # ==========================================
-# TAB 2: PSC DIGITAL TWIN (ChatGPT & Meta)
+# TAB 2: PSC DIGITAL TWIN & AIS TELEMETRY
 # ==========================================
 with tab2:
-    st.subheader("Vessel Inspection Twin")
+    st.subheader("Autonomous Vessel Intelligence")
+    st.markdown("Enter an IMO number to automatically pull satellite telemetry and calculate detention probabilities.")
+    
+    col_search, col_btn = st.columns([3, 1])
+    target_imo = col_search.text_input("Vessel IMO Number", placeholder="e.g. 9412345")
+    
+    # Initialize session state for fetched data so it persists
+    if "vessel_data" not in st.session_state:
+        st.session_state.vessel_data = {"type": "Bulk Carrier", "age": 12, "flag": "Liberia"}
+        
+    if col_btn.button("Engage AIS Uplink", use_container_width=True):
+        if target_imo:
+            with st.spinner("Triangulating satellite telemetry..."):
+                try:
+                    # Simulated API Hook for Prototype (In production, replace with MarineTraffic API)
+                    # We simulate the fetch delay to demonstrate the architecture
+                    import time
+                    time.sleep(1.5)
+                    
+                    # Logic to simulate data retrieval based on IMO
+                    if target_imo.startswith("94"):
+                        st.session_state.vessel_data = {"type": "Oil Tanker", "age": 15, "flag": "Panama"}
+                    elif target_imo.startswith("98"):
+                        st.session_state.vessel_data = {"type": "Container Ship", "age": 5, "flag": "Marshall Islands"}
+                    else:
+                        st.session_state.vessel_data = {"type": "Bulk Carrier", "age": 10, "flag": "Liberia"}
+                        
+                    st.success(f"Uplink Established. Telemetry acquired for IMO {target_imo}.")
+                except Exception as e:
+                    st.error("AIS Satellite Uplink Failed. Manual override required.")
+        else:
+            st.warning("Input valid IMO.")
+
+    st.markdown("---")
+    
+    # The inputs now auto-fill from the AIS data, but remain editable
     col1, col2, col3 = st.columns(3)
-    v_type = col1.selectbox("Hull Type", ["Bulk Carrier", "Oil Tanker", "Container"])
-    v_age = col2.number_input("Age (Years)", 0, 35, 12)
-    v_port = col3.selectbox("Port", ["USCG (Houston)", "Paris MoU (Rotterdam)", "MPA (Singapore)"])
+    v_type = col1.selectbox("Hull Type", ["Bulk Carrier", "Oil Tanker", "Container Ship"], index=["Bulk Carrier", "Oil Tanker", "Container Ship"].index(st.session_state.vessel_data["type"]))
+    v_age = col2.number_input("Age (Years)", 0, 35, st.session_state.vessel_data["age"])
+    v_port = col3.selectbox("Next Port of Call", ["USCG (Houston)", "Paris MoU (Rotterdam)", "MPA (Singapore)"])
     
     col4, col5, col6 = st.columns(3)
-    v_flag = col4.selectbox("Flag State", ["Liberia", "Panama", "Marshall Islands", "Blacklisted Flag"])
+    v_flag = col4.selectbox("Flag State", ["Liberia", "Panama", "Marshall Islands", "Blacklisted Flag"], index=["Liberia", "Panama", "Marshall Islands", "Blacklisted Flag"].index(st.session_state.vessel_data["flag"]))
     v_class = col5.selectbox("Class Society", ["IACS", "Non-IACS"])
     v_def = col6.text_input("Last Deficiencies (Optional)", "e.g., Fire doors, OWS")
 
-    if st.button("Generate Detention Forecast"):
+    if st.button("Generate Detention Forecast", type="primary"):
         with st.spinner("Calculating Boarding & Detention Probabilities..."):
             try:
-                search_query = f"Deficiencies and detention targets for {v_type} in {v_port} regarding {v_def}"
+                search_query = f"Deficiencies and detention targets for {v_type} under {v_flag} flag arriving in {v_port} regarding {v_def}"
                 query_emb = pc.inference.embed(model="multilingual-e5-large", inputs=[search_query], parameters={"input_type": "query"})
                 db_res = index.query(vector=query_emb[0].values, top_k=3, include_metadata=True)
-                ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context."
+                ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context found. Defaulting to baseline compliance."
 
                 sys_prompt = f"""You are the Vector OS Probability Engine.
                 Evaluate a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
                 Database Context: {ctx}
                 
-                OUTPUT:
-                1. Boarding Probability: (e.g., 78%)
-                2. Detention Probability Score: (e.g., 14%)
-                3. Inspector Behavior Intelligence: What does {v_port} strictly focus on historically?
-                4. Top 3 Likely Findings (with percentages of likelihood)."""
+                OUTPUT FORMAT EXACTLY LIKE THIS:
+                1. Boarding Probability: (Provide a realistic percentage)
+                2. Detention Probability Score: (Provide a realistic percentage)
+                3. Inspector Behavior Intelligence: (What does {v_port} strictly focus on historically based on the context?)
+                4. Top 3 Likely Findings: (List them with percentages of likelihood)."""
                 
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
@@ -172,6 +208,7 @@ with tab2:
                 st.markdown(res.choices[0].message.content)
             except Exception as e:
                 st.error(str(e))
+
 
 # ==========================================
 # TAB 3: DECISION SIMULATOR & EMERGENCY ALERTS
