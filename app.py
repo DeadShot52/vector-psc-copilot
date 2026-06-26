@@ -1,11 +1,23 @@
 import streamlit as st
 from groq import Groq
 from pinecone import Pinecone
-import uuid
-import PyPDF2
 from datetime import datetime, timedelta
 from twilio.rest import Client
 import requests
+
+from rag_engine import ingest_data_to_pinecone, query_pinecone
+
+# --- ADMIN PANEL (Temporary) ---
+st.sidebar.title("Admin Tools")
+if st.sidebar.button("Ingest Knowledge Base to Pinecone"):
+    with st.spinner("Ingesting data..."):
+        result = ingest_data_to_pinecone()
+        st.sidebar.success(result)
+
+# Example of how to use it later in your app:
+# user_question = "What are the fire safety requirements?"
+# context = query_pinecone(user_question)
+# prompt = f"Context: {context}\n\nQuestion: {user_question}\n\nAnswer:"
 
 # --- CONFIGURATION & 3D UI ---
 st.set_page_config(page_title="Vector OS | Fleet Intelligence", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
