@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 from pinecone import Pinecone, ServerlessSpec
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -16,7 +15,9 @@ def ingest_data_to_pinecone():
     pc = get_pinecone_client()
     index_name = "maritime-regulations"
     
-    if index_name not in pc.list_indexes().names():
+    # Check if index exists, if not create it
+    existing_indexes = [index.name for index in pc.list_indexes()]
+    if index_name not in existing_indexes:
         pc.create_index(
             name=index_name,
             dimension=384, 
@@ -32,13 +33,19 @@ def ingest_data_to_pinecone():
         return "Knowledge base already ingested!"
         
     # Read the text file
-    with open("knowledge_base.txt", "r", encoding="utf-8") as f:
-        text = f.read()
+    try:
+        with open("knowledge_base.txt", "r", encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        return "Error: knowledge_base.txt not found!"
         
     # Chunk the text
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = text_splitter.split_text(text)
     
+    if not chunks:
+        return "No text chunks to ingest!"
+        
     # Create embeddings and upsert
     vectors = []
     for i, chunk in enumerate(chunks):
@@ -68,5 +75,7 @@ def query_pinecone(query_text, n_results=3):
     )
     
     # Extract the text chunks
-    context = [match['metadata']['text'] for match in results['matches']]
-    return "\n\n".join(context)
+    if results and 'matches' in results:
+        context = [match['metadata']['text'] for match in results['matches']]
+        return "\n\n".join(context)
+    return "No context found."
