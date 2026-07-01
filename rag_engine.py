@@ -3,6 +3,7 @@ from pinecone import Pinecone, ServerlessSpec
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import uuid
 
+
 def get_pinecone_client():
     pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
     return pc
