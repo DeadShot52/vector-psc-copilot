@@ -4,3 +4,7 @@ langchain
 langchain-community
 langchain-text-splitters
 python-dotenv
+groq
+twilio
+PyPDF2
+requests
