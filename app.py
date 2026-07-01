@@ -262,6 +262,7 @@ with tab2:
                 1. AGE MATTERS: 0-5 years old = Low Baseline Risk (<25%). 6-14 years = Medium (25-55%). 15+ years = High (55%+). Adjust strictly from this baseline based on Flag and Port.
                 2. SPECIFICITY: You MUST name exact equipment (e.g., Quick Closing Valves, OWS, ECDIS, Fire Dampers) and specific deficiency codes if known. Do not just say "firefighting system".
                 3. FORMAT: Use crisp, data-dense bullet points (1-2 concise sentences max). No fluff, no introductory or concluding paragraphs.
+                4. DO NOT invent past deficiencies for the specific vessel. You do not have its individual history. You are predicting FUTURE risks based purely on Port trends, Flag, and Age.
                 
                 OUTPUT FORMAT EXACTLY LIKE THIS:
                 **Boarding Probability**: [X]%
