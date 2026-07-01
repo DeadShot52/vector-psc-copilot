@@ -134,6 +134,7 @@ with tab1:
                     st.markdown(res.choices[0].message.content)
                 except Exception as e:
                     st.error(str(e))
+
 # ==========================================
 # TAB 2: PSC DIGITAL TWIN & AIS TELEMETRY
 # ==========================================
@@ -162,24 +163,22 @@ with tab2:
                         
                         if res.status_code == 200:
                             raw_data = res.json()
-                            ship = raw_data
                             
-                            # Handle nested arrays/objects safely
-                            if "data" in ship:
-                                ship = ship["data"]
-                            if isinstance(ship, list) and len(ship) > 0:
-                                ship = ship[0]
+                            # Targeted extraction based on your exact JSON payload
+                            if "vessel" in raw_data:
+                                ship = raw_data["vessel"]
+                            else:
+                                ship = raw_data
                                 
-                            # Omni-Catcher: Scans for multiple variations of API keys
-                            v_name = ship.get("vesselName") or ship.get("vessel_name") or ship.get("name") or "Unknown"
-                            v_type = ship.get("vesselType") or ship.get("vessel_type") or ship.get("type") or "Bulk Carrier"
-                            v_flag = ship.get("flag") or ship.get("country") or "Unknown"
+                            v_name = ship.get("name", "Unknown")
+                            v_type = ship.get("vessel_type", "Bulk Carrier")
+                            v_flag = ship.get("country", "Unknown")
                             
-                            y_built = ship.get("yearBuilt") or ship.get("year_built") or ship.get("build_year") or 2010
+                            y_built = ship.get("year_built", 2010)
                             try:
                                 v_age = datetime.now().year - int(y_built)
                             except:
-                                v_age = 15 # Default fallback if API sends a blank year
+                                v_age = 15 
                                 
                             st.session_state.vessel_data = {
                                 "type": v_type, 
@@ -188,7 +187,6 @@ with tab2:
                             }
                             st.success(f"Live Uplink Established: {v_name} (IMO {target_imo})")
                             
-                            # The "Matrix" Data Dump for live pitches
                             with st.expander("📡 View Raw Satellite Telemetry"):
                                 st.json(raw_data)
                                 
@@ -241,7 +239,7 @@ with tab2:
     col4, col5, col6 = st.columns(3)
     
     # Safe Flag Fallback
-    flag_options = list(set(["Liberia", "Panama", "Marshall Islands", "Cyprus", "Denmark", "France", "Blacklisted Flag", st.session_state.vessel_data["flag"]]))
+    flag_options = list(set(["Liberia", "Panama", "Marshall Islands", "Cyprus", "Denmark", "France", "Singapore", "Blacklisted Flag", st.session_state.vessel_data["flag"]]))
     v_flag = col4.selectbox("Flag State", flag_options, index=flag_options.index(st.session_state.vessel_data["flag"]))
     
     v_class = col5.selectbox("Class Society", ["IACS", "Non-IACS"])
@@ -287,7 +285,6 @@ with tab2:
                 st.markdown(res.choices[0].message.content)
             except Exception as e:
                 st.error(str(e))
-
 
 
 # ==========================================
