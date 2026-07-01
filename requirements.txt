@@ -8,3 +8,4 @@ groq
 twilio
 PyPDF2
 requests
+sentence-transformers
