@@ -38,7 +38,7 @@ try:
     pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
     
     # Ensure the 1024-dimension enterprise index exists
-    index_name = "maritime-regulations"
+    index_name = "vector-core-v1"
     if index_name not in [idx.name for idx in pc.list_indexes()]:
         pc.create_index(
             name=index_name,
