@@ -1,23 +1,12 @@
 import streamlit as st
 from groq import Groq
-from pinecone import Pinecone
+from pinecone import Pinecone, ServerlessSpec
 from datetime import datetime, timedelta
 from twilio.rest import Client
 import requests
-
-from rag_engine import ingest_data_to_pinecone, query_pinecone
-
-# --- ADMIN PANEL (Temporary) ---
-st.sidebar.title("Admin Tools")
-if st.sidebar.button("Ingest Knowledge Base to Pinecone"):
-    with st.spinner("Ingesting data..."):
-        result = ingest_data_to_pinecone()
-        st.sidebar.success(result)
-
-# Example of how to use it later in your app:
-# user_question = "What are the fire safety requirements?"
-# context = query_pinecone(user_question)
-# prompt = f"Context: {context}\n\nQuestion: {user_question}\n\nAnswer:"
+import PyPDF2
+import uuid
+import time
 
 # --- CONFIGURATION & 3D UI ---
 st.set_page_config(page_title="Vector OS | Fleet Intelligence", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
@@ -43,18 +32,28 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- API INITIALIZATION ---
+# --- API INITIALIZATION & CLOUD CONNECTION ---
 try:
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
     pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
-    index = pc.Index("vector-maritime")
+    
+    # Ensure the 1024-dimension enterprise index exists
+    index_name = "maritime-regulations"
+    if index_name not in [idx.name for idx in pc.list_indexes()]:
+        pc.create_index(
+            name=index_name,
+            dimension=1024, 
+            metric='cosine',
+            spec=ServerlessSpec(cloud='aws', region='us-east-1')
+        )
+    index = pc.Index(index_name)
+    
 except Exception as e:
     st.error(f"SYSTEM OFFLINE: {str(e)}")
     st.stop()
 
 # --- INITIALIZE IN-MEMORY FLEET DATABASE ---
 if 'fleet' not in st.session_state:
-    # Starting baseline fleet data for a professional presentation
     st.session_state['fleet'] = [
         {"name": "Vector Horizon", "imo": 9412345, "risk": 22, "type": "Oil Tanker"},
         {"name": "Vector Sovereign", "imo": 9654321, "risk": 74, "type": "Bulk Carrier"},
@@ -64,15 +63,9 @@ if 'fleet' not in st.session_state:
 # --- DYNAMIC METRIC CALCULATIONS ---
 fleet_data = st.session_state['fleet']
 total_ships = len(fleet_data)
-
-# High Risk means a vessel has an individual risk score over 60
 high_risk_count = sum(1 for ship in fleet_data if ship['risk'] > 60)
-
-# Fleet Readiness is the inverse average risk of all combined vessels
 avg_fleet_risk = sum(ship['risk'] for ship in fleet_data) / total_ships if total_ships > 0 else 0
 computed_readiness = int(100 - avg_fleet_risk)
-
-# Dynamic Threat Level threshold evaluation
 computed_threat = "CRITICAL" if high_risk_count >= 2 else "ELEVATED" if high_risk_count == 1 else "LOW RISK"
 
 # --- HEADER: FLEET DASHBOARD ---
@@ -96,12 +89,11 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ==========================================
-# TAB 1: SMS & DOCUMENT AUDIT (Claude & Grok)
+# TAB 1: SMS & DOCUMENT AUDIT 
 # ==========================================
 with tab1:
     st.subheader("Proprietary Document Cross-Examination")
     
-    # Fortified Enterprise Security Shield Banner
     st.markdown("""
         <div style="background: rgba(0, 242, 254, 0.05); border: 1px solid #00F2FE; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <span style="color: #00F2FE; font-weight: bold;">🔒 ENTERPRISE SECURITY PROTOCOL ACTIVE</span><br>
@@ -143,7 +135,6 @@ with tab1:
                 except Exception as e:
                     st.error(str(e))
 
-
 # ==========================================
 # TAB 2: PSC DIGITAL TWIN & AIS TELEMETRY
 # ==========================================
@@ -154,43 +145,40 @@ with tab2:
     col_search, col_btn = st.columns([3, 1])
     target_imo = col_search.text_input("Vessel IMO Number", placeholder="e.g. 9412345")
     
-    # Initialize session state for fetched data so it persists
     if "vessel_data" not in st.session_state:
         st.session_state.vessel_data = {"type": "Bulk Carrier", "age": 12, "flag": "Liberia"}
         
     if col_btn.button("Engage AIS Uplink", use_container_width=True):
         if target_imo:
-            with st.spinner("Triangulating satellite telemetry..."):
-                try:
-                    # Simulated API Hook for Prototype (In production, replace with MarineTraffic API)
-                    # We simulate the fetch delay to demonstrate the architecture
-                    import time
-                    time.sleep(1.5)
-                    
-                    # Logic to simulate data retrieval based on IMO
-                    if target_imo.startswith("94"):
-                        st.session_state.vessel_data = {"type": "Oil Tanker", "age": 15, "flag": "Panama"}
-                    elif target_imo.startswith("98"):
-                        st.session_state.vessel_data = {"type": "Container Ship", "age": 5, "flag": "Marshall Islands"}
-                    else:
-                        st.session_state.vessel_data = {"type": "Bulk Carrier", "age": 10, "flag": "Liberia"}
-                        
-                    st.success(f"Uplink Established. Telemetry acquired for IMO {target_imo}.")
-                except Exception as e:
-                    st.error("AIS Satellite Uplink Failed. Manual override required.")
+            with st.spinner("Bypassing external gateways... Querying secure internal registry..."):
+                time.sleep(0.8)
+                local_registry = {
+                    "9320520": {"name": "Emma Maersk", "type": "Container Ship", "flag": "Denmark", "build": 2006},
+                    "9432652": {"name": "Stena Polaris", "type": "Oil Tanker", "flag": "Cyprus", "build": 2010},
+                    "9455923": {"name": "Valemax Brasil", "type": "Bulk Carrier", "flag": "Singapore", "build": 2011},
+                    "9848520": {"name": "CMA CGM Jacques Saade", "type": "Container Ship", "flag": "France", "build": 2020},
+                    "9164263": {"name": "Front Century", "type": "Oil Tanker", "flag": "Marshall Islands", "build": 1998}
+                }
+                
+                if target_imo in local_registry:
+                    ship_intel = local_registry[target_imo]
+                    fetched_age = datetime.now().year - ship_intel["build"]
+                    st.session_state.vessel_data = {"type": ship_intel["type"], "age": fetched_age, "flag": ship_intel["flag"]}
+                    st.success(f"Uplink Established. Vessel profile acquired for {ship_intel['name']} (IMO {target_imo}).")
+                else:
+                    st.warning("IMO not indexed in beta registry. Please utilize manual dropdown override.")
         else:
             st.warning("Input valid IMO.")
 
     st.markdown("---")
     
-    # The inputs now auto-fill from the AIS data, but remain editable
     col1, col2, col3 = st.columns(3)
     v_type = col1.selectbox("Hull Type", ["Bulk Carrier", "Oil Tanker", "Container Ship"], index=["Bulk Carrier", "Oil Tanker", "Container Ship"].index(st.session_state.vessel_data["type"]))
     v_age = col2.number_input("Age (Years)", 0, 35, st.session_state.vessel_data["age"])
     v_port = col3.selectbox("Next Port of Call", ["USCG (Houston)", "Paris MoU (Rotterdam)", "MPA (Singapore)"])
     
     col4, col5, col6 = st.columns(3)
-    v_flag = col4.selectbox("Flag State", ["Liberia", "Panama", "Marshall Islands", "Blacklisted Flag"], index=["Liberia", "Panama", "Marshall Islands", "Blacklisted Flag"].index(st.session_state.vessel_data["flag"]))
+    v_flag = col4.selectbox("Flag State", ["Liberia", "Panama", "Marshall Islands", "Cyprus", "Denmark", "France", "Blacklisted Flag"], index=0)
     v_class = col5.selectbox("Class Society", ["IACS", "Non-IACS"])
     v_def = col6.text_input("Last Deficiencies (Optional)", "e.g., Fire doors, OWS")
 
@@ -220,7 +208,6 @@ with tab2:
                 st.markdown(res.choices[0].message.content)
             except Exception as e:
                 st.error(str(e))
-
 
 # ==========================================
 # TAB 3: DECISION SIMULATOR & EMERGENCY ALERTS
@@ -262,10 +249,9 @@ with tab3:
         else:
             with st.spinner("Establishing secure handshake with telecommunications gateway..."):
                 try:
-                    # Pulling security credentials from your hidden Streamlit Secrets
                     account_sid = st.secrets["TWILIO_ACCOUNT_SID"]
                     auth_token = st.secrets["TWILIO_AUTH_TOKEN"]
-                    twilio_whatsapp_number = st.secrets["TWILIO_WHATSAPP_NUMBER"] # Typically 'whatsapp:+14155238886' for sandbox
+                    twilio_whatsapp_number = st.secrets["TWILIO_WHATSAPP_NUMBER"]
                     
                     twilio_client = Client(account_sid, auth_token)
                     
@@ -276,12 +262,10 @@ with tab3:
                     )
                     st.success(f"🚀 Dispatch Successful! Message ID: {message.sid}")
                 except Exception as e:
-                    st.error(f"Error: {str(e)} | Keys Streamlit can actually see: {list(st.secrets.keys())}")
-
-
+                    st.error(f"Alert Failed: {str(e)}")
 
 # ==========================================
-# TAB 4: CIC & CERT ENGINE (Claude)
+# TAB 4: CIC & CERT ENGINE
 # ==========================================
 with tab4:
     st.subheader("Concentrated Inspection Campaign (CIC) Engine")
@@ -300,6 +284,7 @@ with tab4:
             st.error(f"CRITICAL: {cert_name} expires in {days_left} days. High probability of PSC code 30 (Detainable) if an extension is not secured before arrival.")
         else:
             st.success(f"{cert_name} is secure for {days_left} days.")
+
 # ==========================================
 # SYSTEM ADMINISTRATION & DATA INGESTION
 # ==========================================
@@ -310,15 +295,13 @@ with st.expander("⚓ System Administration & Knowledge Base Ingestion"):
     
     admin_password = st.text_input("Enter Admin Security Token", type="password")
     
-    # Simple guard to ensure random users don't overwrite your database
     if admin_password == "vector2026": 
         uploaded_file = st.file_uploader("Choose a maritime PDF report", type=["pdf"])
         
         if uploaded_file is not None:
             if st.button("Execute Vector Conversion & Ingestion", type="primary"):
-                with st.spinner("Deconstructing PDF and generating mathematical embeddings..."):
+                with st.spinner("Deconstructing PDF and generating 1024-dimension mathematical embeddings..."):
                     try:
-                        # 1. Parse text from the uploaded PDF using PyPDF2
                         reader = PyPDF2.PdfReader(uploaded_file)
                         full_text = ""
                         for page in reader.pages:
@@ -330,11 +313,10 @@ with st.expander("⚓ System Administration & Knowledge Base Ingestion"):
                             st.error("Could not extract legible text from this PDF. It might be scanned images.")
                             st.stop()
                             
-                        # 2. Slice text into clean semantic chunks (approx 1000 chars each)
+                        # Intelligent string chunking (Bypasses LangChain completely)
                         chunk_size = 1000
                         overlap = 200
                         chunks = []
-                        
                         start = 0
                         while start < len(full_text):
                             end = start + chunk_size
@@ -343,21 +325,18 @@ with st.expander("⚓ System Administration & Knowledge Base Ingestion"):
                         
                         st.info(f"PDF split into {len(chunks)} tactical data chunks. Initiating cloud uplink...")
                         
-                        # 3. Embed and Upsert in batches of 20 to prevent network timeouts
                         batch_size = 20
                         progress_bar = st.progress(0)
                         
                         for i in range(0, len(chunks), batch_size):
                             batch_chunks = chunks[i:i+batch_size]
                             
-                            # Generate vectors using Pinecone's native model
                             embeddings = pc.inference.embed(
                                 model="multilingual-e5-large",
                                 inputs=batch_chunks,
                                 parameters={"input_type": "passage"}
                             )
                             
-                            # Prepare vectors for database insertion
                             vectors_to_upsert = []
                             for j, chunk in enumerate(batch_chunks):
                                 unique_id = f"{uploaded_file.name}_chunk_{i+j}_{str(uuid.uuid4())[:8]}"
@@ -367,10 +346,8 @@ with st.expander("⚓ System Administration & Knowledge Base Ingestion"):
                                     "metadata": {"text": chunk, "source": uploaded_file.name}
                                 })
                             
-                            # Fire directly into your Pinecone Index
                             index.upsert(vectors=vectors_to_upsert)
                             
-                            # Update progress UI
                             fraction = min((i + batch_size) / len(chunks), 1.0)
                             progress_bar.progress(fraction)
                         
