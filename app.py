@@ -284,7 +284,13 @@ with tab2:
                     messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": "Forecast risk."}],
                     temperature=0.1 # Lowered temperature to force strictly logical, less creative outputs
                 )
-                st.markdown(res.choices[0].message.content)
+                st.markdown(res.choices[0].message.content) 
+                                # --- VERIFICATION AUDIT TRAIL ---
+                st.markdown("---")
+                with st.expander("🔍 Verify AI Intelligence (Raw Database Context)"):
+                    st.info("Vector OS generated this forecast strictly from the following encrypted data chunks extracted from your uploaded maritime PDFs:")
+                    st.text(ctx)
+
             except Exception as e:
                 st.error(str(e))
 
