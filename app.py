@@ -134,8 +134,7 @@ with tab1:
                     st.markdown(res.choices[0].message.content)
                 except Exception as e:
                     st.error(str(e))
-
-# ==========================================
+    # ==========================================
 # TAB 2: PSC DIGITAL TWIN & AIS TELEMETRY
 # ==========================================
 with tab2:
@@ -151,29 +150,46 @@ with tab2:
     if col_btn.button("Engage AIS Uplink", use_container_width=True):
         if target_imo:
             with st.spinner("Pinging Global AIS Satellite Network..."):
-                # 1. Attempt Live API Uplink
+                # 1. Attempt Live API Uplink (VesselAPI)
                 api_key = st.secrets.get("VESSEL_API_KEY", "")
                 api_success = False
                 
                 if api_key:
                     try:
                         headers = {"Authorization": f"Bearer {api_key}"}
-                        res = requests.get(f"https://api.vesselapi.com/v1/vessels?filter.imo={target_imo}", headers=headers, timeout=5)
-                        if res.status_code == 200 and res.json().get("data"):
-                            ship = res.json()["data"][0]
+                        # Corrected URL endpoint specifically for VesselAPI docs
+                        url = f"https://api.vesselapi.com/v1/vessel/{target_imo}?filter.idType=imo"
+                        res = requests.get(url, headers=headers, timeout=8)
+                        
+                        if res.status_code == 200:
+                            ship = res.json()
+                            
+                            # Handle potential nested JSON structure
+                            if "data" in ship:
+                                ship = ship["data"]
+                            if isinstance(ship, list) and len(ship) > 0:
+                                ship = ship[0]
+                                
                             st.session_state.vessel_data = {
-                                "type": ship.get("vesselType", "Bulk Carrier"), 
-                                "age": datetime.now().year - ship.get("yearBuilt", 2010), 
-                                "flag": ship.get("flag", "Unknown")
+                                "type": ship.get("vessel_type", "Bulk Carrier"), 
+                                "age": datetime.now().year - int(ship.get("year_built") or 2010), 
+                                "flag": ship.get("country", "Unknown")
                             }
-                            st.success(f"Live Uplink Established: {ship.get('vesselName', 'Unknown')} (IMO {target_imo})")
+                            st.success(f"Live Uplink Established: {ship.get('name', 'Unknown')} (IMO {target_imo})")
                             api_success = True
-                    except Exception:
-                        pass # Silently catch network errors to trigger fallback
+                        else:
+                            # Print the exact error on screen instead of hiding it
+                            st.error(f"API Rejected Request (Code {res.status_code}): {res.text}")
+                    except Exception as e:
+                        st.error(f"Live API Network Failure: {str(e)}")
+                else:
+                    st.error("No VESSEL_API_KEY found in Streamlit Secrets.")
                 
-                # 2. Bulletproof Fallback to Offline Registry
+                # 2. Fallback to Offline Registry ONLY if API genuinely fails
                 if not api_success:
+                    st.info("Attempting offline registry fallback...")
                     local_registry = {
+                        "9388297": {"name": "SELECAO", "type": "Oil Tanker", "flag": "Liberia", "build": 2008},
                         "9320520": {"name": "Emma Maersk", "type": "Container Ship", "flag": "Denmark", "build": 2006},
                         "9432652": {"name": "Stena Polaris", "type": "Oil Tanker", "flag": "Cyprus", "build": 2010},
                         "9455923": {"name": "Valemax Brasil", "type": "Bulk Carrier", "flag": "Singapore", "build": 2011},
@@ -198,7 +214,7 @@ with tab2:
     col1, col2, col3 = st.columns(3)
     
     # Safe Hull Type Fallback
-    hull_options = ["Bulk Carrier", "Oil Tanker", "Container Ship"]
+    hull_options = ["Bulk Carrier", "Oil Tanker", "Container Ship", "Tanker"]
     fetched_type = st.session_state.vessel_data["type"]
     if fetched_type not in hull_options:
         hull_options.append(fetched_type)
@@ -224,22 +240,24 @@ with tab2:
                 db_res = index.query(vector=query_emb[0].values, top_k=3, include_metadata=True)
                 ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context found. Defaulting to baseline compliance."
 
-                sys_prompt = f"""You are the Vector OS Probability Engine.
-                Evaluate a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
-                Database Context: {ctx}
+                sys_prompt = f"""You are the Vector OS Predictive Risk Engine.
+                Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
+                Context: {ctx}
                 
-                STRICT OUTPUT RULES:
-                - NO introductory or concluding sentences.
-                - Use ultra-concise, rapid-fire bullet points (Max 15 words per bullet).
-                - Sound like a highly paid corporate risk analyst.
+                CRITICAL RULES:
+                - Output ONLY the exact format below.
+                - Max 10 words per bullet point. NO full sentences.
+                - Be blunt, analytical, and highly technical.
                 
-                OUTPUT FORMAT EXACTLY LIKE THIS:
-                **Boarding Probability**: [X]% - [One sentence reason]
-                **Detention Risk**: [X]% - [One sentence reason]
+                **Boarding Probability**: [X]%
+                * [Primary trigger factor]
                 
-                **Inspector Focus**: 
-                * [Target 1]
-                * [Target 2]
+                **Detention Risk**: [X]%
+                * [Primary risk factor]
+                
+                **Inspector Focus Vectors**: 
+                * [Target area 1]
+                * [Target area 2]
                 
                 **Top 3 Likely Findings**: 
                 1. [Finding] ([X]%)
