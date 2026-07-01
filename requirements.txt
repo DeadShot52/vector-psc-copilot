@@ -1,9 +1,6 @@
 streamlit
 pinecone
-langchain
-langchain-community
 langchain-text-splitters
-python-dotenv
 groq
 twilio
 PyPDF2
