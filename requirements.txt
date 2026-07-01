@@ -4,4 +4,5 @@ langchain-text-splitters
 groq
 twilio
 PyPDF2
+pycryptodome
 requests
