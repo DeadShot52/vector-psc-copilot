@@ -1,7 +1,8 @@
 import streamlit as st
 from pinecone import Pinecone, ServerlessSpec
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+import uuid
 
 # Initialize embeddings (runs on Streamlit cloud for free)
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -10,8 +11,8 @@ def get_pinecone_client():
     pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
     return pc
 
-def ingest_data_to_pinecone():
-    """Reads knowledge_base.txt, chunks it, and upserts to Pinecone."""
+def ingest_data_to_pinecone(text, source_name):
+    """Chunks dynamic PDF text and upserts to Pinecone."""
     pc = get_pinecone_client()
     index_name = "maritime-regulations"
     
@@ -26,21 +27,9 @@ def ingest_data_to_pinecone():
         )
     
     index = pc.Index(index_name)
-    
-    # Check if already populated
-    stats = index.describe_index_stats()
-    if stats['total_vector_count'] > 0:
-        return "Knowledge base already ingested!"
         
-    # Read the text file
-    try:
-        with open("knowledge_base.txt", "r", encoding="utf-8") as f:
-            text = f.read()
-    except FileNotFoundError:
-        return "Error: knowledge_base.txt not found!"
-        
-    # Chunk the text
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    # Chunk the text (Expanded for heavy PDFs)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_text(text)
     
     if not chunks:
@@ -50,14 +39,15 @@ def ingest_data_to_pinecone():
     vectors = []
     for i, chunk in enumerate(chunks):
         emb = embeddings.embed_query(chunk)
+        unique_id = f"{source_name}_chunk_{i}_{str(uuid.uuid4())[:8]}"
         vectors.append({
-            "id": f"chunk_{i}",
+            "id": unique_id,
             "values": emb,
-            "metadata": {"text": chunk}
+            "metadata": {"text": chunk, "source": source_name}
         })
         
     index.upsert(vectors=vectors)
-    return f"Successfully ingested {len(chunks)} chunks into Pinecone!"
+    return f"Successfully ingested {len(chunks)} tactical data chunks from {source_name}!"
 
 def query_pinecone(query_text, n_results=3):
     """Searches Pinecone for relevant context."""
