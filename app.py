@@ -134,7 +134,7 @@ with tab1:
                     st.markdown(res.choices[0].message.content)
                 except Exception as e:
                     st.error(str(e))
-    # ==========================================
+# ==========================================
 # TAB 2: PSC DIGITAL TWIN & AIS TELEMETRY
 # ==========================================
 with tab2:
@@ -150,42 +150,57 @@ with tab2:
     if col_btn.button("Engage AIS Uplink", use_container_width=True):
         if target_imo:
             with st.spinner("Pinging Global AIS Satellite Network..."):
-                # 1. Attempt Live API Uplink (VesselAPI)
+                # 1. Attempt Live API Uplink
                 api_key = st.secrets.get("VESSEL_API_KEY", "")
                 api_success = False
                 
                 if api_key:
                     try:
                         headers = {"Authorization": f"Bearer {api_key}"}
-                        # Corrected URL endpoint specifically for VesselAPI docs
                         url = f"https://api.vesselapi.com/v1/vessel/{target_imo}?filter.idType=imo"
                         res = requests.get(url, headers=headers, timeout=8)
                         
                         if res.status_code == 200:
-                            ship = res.json()
+                            raw_data = res.json()
+                            ship = raw_data
                             
-                            # Handle potential nested JSON structure
+                            # Handle nested arrays/objects safely
                             if "data" in ship:
                                 ship = ship["data"]
                             if isinstance(ship, list) and len(ship) > 0:
                                 ship = ship[0]
                                 
+                            # Omni-Catcher: Scans for multiple variations of API keys
+                            v_name = ship.get("vesselName") or ship.get("vessel_name") or ship.get("name") or "Unknown"
+                            v_type = ship.get("vesselType") or ship.get("vessel_type") or ship.get("type") or "Bulk Carrier"
+                            v_flag = ship.get("flag") or ship.get("country") or "Unknown"
+                            
+                            y_built = ship.get("yearBuilt") or ship.get("year_built") or ship.get("build_year") or 2010
+                            try:
+                                v_age = datetime.now().year - int(y_built)
+                            except:
+                                v_age = 15 # Default fallback if API sends a blank year
+                                
                             st.session_state.vessel_data = {
-                                "type": ship.get("vessel_type", "Bulk Carrier"), 
-                                "age": datetime.now().year - int(ship.get("year_built") or 2010), 
-                                "flag": ship.get("country", "Unknown")
+                                "type": v_type, 
+                                "age": v_age, 
+                                "flag": v_flag
                             }
-                            st.success(f"Live Uplink Established: {ship.get('name', 'Unknown')} (IMO {target_imo})")
+                            st.success(f"Live Uplink Established: {v_name} (IMO {target_imo})")
+                            
+                            # The "Matrix" Data Dump for live pitches
+                            with st.expander("📡 View Raw Satellite Telemetry"):
+                                st.json(raw_data)
+                                
                             api_success = True
                         else:
-                            # Print the exact error on screen instead of hiding it
                             st.error(f"API Rejected Request (Code {res.status_code}): {res.text}")
                     except Exception as e:
                         st.error(f"Live API Network Failure: {str(e)}")
                 else:
                     st.error("No VESSEL_API_KEY found in Streamlit Secrets.")
                 
-                # 2. Fallback to Offline Registry ONLY if API genuinely fails
+                # 2. Bulletproof Fallback to Offline Registry
                 if not api_success:
                     st.info("Attempting offline registry fallback...")
                     local_registry = {
@@ -214,7 +229,7 @@ with tab2:
     col1, col2, col3 = st.columns(3)
     
     # Safe Hull Type Fallback
-    hull_options = ["Bulk Carrier", "Oil Tanker", "Container Ship", "Tanker"]
+    hull_options = ["Bulk Carrier", "Oil Tanker", "Container Ship", "Tanker", "General Cargo"]
     fetched_type = st.session_state.vessel_data["type"]
     if fetched_type not in hull_options:
         hull_options.append(fetched_type)
@@ -272,6 +287,7 @@ with tab2:
                 st.markdown(res.choices[0].message.content)
             except Exception as e:
                 st.error(str(e))
+
 
 
 # ==========================================
