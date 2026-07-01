@@ -150,35 +150,69 @@ with tab2:
         
     if col_btn.button("Engage AIS Uplink", use_container_width=True):
         if target_imo:
-            with st.spinner("Bypassing external gateways... Querying secure internal registry..."):
-                time.sleep(0.8)
-                local_registry = {
-                    "9320520": {"name": "Emma Maersk", "type": "Container Ship", "flag": "Denmark", "build": 2006},
-                    "9432652": {"name": "Stena Polaris", "type": "Oil Tanker", "flag": "Cyprus", "build": 2010},
-                    "9455923": {"name": "Valemax Brasil", "type": "Bulk Carrier", "flag": "Singapore", "build": 2011},
-                    "9848520": {"name": "CMA CGM Jacques Saade", "type": "Container Ship", "flag": "France", "build": 2020},
-                    "9164263": {"name": "Front Century", "type": "Oil Tanker", "flag": "Marshall Islands", "build": 1998}
-                }
+            with st.spinner("Pinging Global AIS Satellite Network..."):
+                # 1. Attempt Live API Uplink
+                api_key = st.secrets.get("VESSEL_API_KEY", "")
+                api_success = False
                 
-                if target_imo in local_registry:
-                    ship_intel = local_registry[target_imo]
-                    fetched_age = datetime.now().year - ship_intel["build"]
-                    st.session_state.vessel_data = {"type": ship_intel["type"], "age": fetched_age, "flag": ship_intel["flag"]}
-                    st.success(f"Uplink Established. Vessel profile acquired for {ship_intel['name']} (IMO {target_imo}).")
-                else:
-                    st.warning("IMO not indexed in beta registry. Please utilize manual dropdown override.")
+                if api_key:
+                    try:
+                        headers = {"Authorization": f"Bearer {api_key}"}
+                        res = requests.get(f"https://api.vesselapi.com/v1/vessels?filter.imo={target_imo}", headers=headers, timeout=5)
+                        if res.status_code == 200 and res.json().get("data"):
+                            ship = res.json()["data"][0]
+                            st.session_state.vessel_data = {
+                                "type": ship.get("vesselType", "Bulk Carrier"), 
+                                "age": datetime.now().year - ship.get("yearBuilt", 2010), 
+                                "flag": ship.get("flag", "Unknown")
+                            }
+                            st.success(f"Live Uplink Established: {ship.get('vesselName', 'Unknown')} (IMO {target_imo})")
+                            api_success = True
+                    except Exception:
+                        pass # Silently catch network errors to trigger fallback
+                
+                # 2. Bulletproof Fallback to Offline Registry
+                if not api_success:
+                    local_registry = {
+                        "9320520": {"name": "Emma Maersk", "type": "Container Ship", "flag": "Denmark", "build": 2006},
+                        "9432652": {"name": "Stena Polaris", "type": "Oil Tanker", "flag": "Cyprus", "build": 2010},
+                        "9455923": {"name": "Valemax Brasil", "type": "Bulk Carrier", "flag": "Singapore", "build": 2011},
+                        "9848520": {"name": "CMA CGM Jacques Saade", "type": "Container Ship", "flag": "France", "build": 2020},
+                        "9164263": {"name": "Front Century", "type": "Oil Tanker", "flag": "Marshall Islands", "build": 1998}
+                    }
+                    if target_imo in local_registry:
+                        ship_intel = local_registry[target_imo]
+                        st.session_state.vessel_data = {
+                            "type": ship_intel["type"], 
+                            "age": datetime.now().year - ship_intel["build"], 
+                            "flag": ship_intel["flag"]
+                        }
+                        st.success(f"Offline Uplink: {ship_intel['name']} (IMO {target_imo}).")
+                    else:
+                        st.warning("IMO not found in live network or offline registry. Use manual dropdowns.")
         else:
             st.warning("Input valid IMO.")
 
     st.markdown("---")
     
     col1, col2, col3 = st.columns(3)
-    v_type = col1.selectbox("Hull Type", ["Bulk Carrier", "Oil Tanker", "Container Ship"], index=["Bulk Carrier", "Oil Tanker", "Container Ship"].index(st.session_state.vessel_data["type"]))
-    v_age = col2.number_input("Age (Years)", 0, 35, st.session_state.vessel_data["age"])
+    
+    # Safe Hull Type Fallback
+    hull_options = ["Bulk Carrier", "Oil Tanker", "Container Ship"]
+    fetched_type = st.session_state.vessel_data["type"]
+    if fetched_type not in hull_options:
+        hull_options.append(fetched_type)
+        
+    v_type = col1.selectbox("Hull Type", hull_options, index=hull_options.index(fetched_type))
+    v_age = col2.number_input("Age (Years)", 0, 50, st.session_state.vessel_data["age"])
     v_port = col3.selectbox("Next Port of Call", ["USCG (Houston)", "Paris MoU (Rotterdam)", "MPA (Singapore)"])
     
     col4, col5, col6 = st.columns(3)
-    v_flag = col4.selectbox("Flag State", ["Liberia", "Panama", "Marshall Islands", "Cyprus", "Denmark", "France", "Blacklisted Flag"], index=0)
+    
+    # Safe Flag Fallback
+    flag_options = list(set(["Liberia", "Panama", "Marshall Islands", "Cyprus", "Denmark", "France", "Blacklisted Flag", st.session_state.vessel_data["flag"]]))
+    v_flag = col4.selectbox("Flag State", flag_options, index=flag_options.index(st.session_state.vessel_data["flag"]))
+    
     v_class = col5.selectbox("Class Society", ["IACS", "Non-IACS"])
     v_def = col6.text_input("Last Deficiencies (Optional)", "e.g., Fire doors, OWS")
 
@@ -194,11 +228,23 @@ with tab2:
                 Evaluate a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
                 Database Context: {ctx}
                 
+                STRICT OUTPUT RULES:
+                - NO introductory or concluding sentences.
+                - Use ultra-concise, rapid-fire bullet points (Max 15 words per bullet).
+                - Sound like a highly paid corporate risk analyst.
+                
                 OUTPUT FORMAT EXACTLY LIKE THIS:
-                1. Boarding Probability: (Provide a realistic percentage)
-                2. Detention Probability Score: (Provide a realistic percentage)
-                3. Inspector Behavior Intelligence: (What does {v_port} strictly focus on historically based on the context?)
-                4. Top 3 Likely Findings: (List them with percentages of likelihood)."""
+                **Boarding Probability**: [X]% - [One sentence reason]
+                **Detention Risk**: [X]% - [One sentence reason]
+                
+                **Inspector Focus**: 
+                * [Target 1]
+                * [Target 2]
+                
+                **Top 3 Likely Findings**: 
+                1. [Finding] ([X]%)
+                2. [Finding] ([X]%)
+                3. [Finding] ([X]%)"""
                 
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
@@ -208,6 +254,7 @@ with tab2:
                 st.markdown(res.choices[0].message.content)
             except Exception as e:
                 st.error(str(e))
+
 
 # ==========================================
 # TAB 3: DECISION SIMULATOR & EMERGENCY ALERTS
