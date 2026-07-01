@@ -300,3 +300,83 @@ with tab4:
             st.error(f"CRITICAL: {cert_name} expires in {days_left} days. High probability of PSC code 30 (Detainable) if an extension is not secured before arrival.")
         else:
             st.success(f"{cert_name} is secure for {days_left} days.")
+# ==========================================
+# SYSTEM ADMINISTRATION & DATA INGESTION
+# ==========================================
+st.markdown("---")
+with st.expander("⚓ System Administration & Knowledge Base Ingestion"):
+    st.subheader("Vector Brain Core Uplink")
+    st.markdown("Upload official maritime convention updates or MoU reports directly into the Pinecone Vector database.")
+    
+    admin_password = st.text_input("Enter Admin Security Token", type="password")
+    
+    # Simple guard to ensure random users don't overwrite your database
+    if admin_password == "vector2026": 
+        uploaded_file = st.file_uploader("Choose a maritime PDF report", type=["pdf"])
+        
+        if uploaded_file is not None:
+            if st.button("Execute Vector Conversion & Ingestion", type="primary"):
+                with st.spinner("Deconstructing PDF and generating mathematical embeddings..."):
+                    try:
+                        # 1. Parse text from the uploaded PDF using PyPDF2
+                        reader = PyPDF2.PdfReader(uploaded_file)
+                        full_text = ""
+                        for page in reader.pages:
+                            text = page.extract_text()
+                            if text:
+                                full_text += text + "\n"
+                        
+                        if not full_text.strip():
+                            st.error("Could not extract legible text from this PDF. It might be scanned images.")
+                            st.stop()
+                            
+                        # 2. Slice text into clean semantic chunks (approx 1000 chars each)
+                        chunk_size = 1000
+                        overlap = 200
+                        chunks = []
+                        
+                        start = 0
+                        while start < len(full_text):
+                            end = start + chunk_size
+                            chunks.append(full_text[start:end])
+                            start += chunk_size - overlap
+                        
+                        st.info(f"PDF split into {len(chunks)} tactical data chunks. Initiating cloud uplink...")
+                        
+                        # 3. Embed and Upsert in batches of 20 to prevent network timeouts
+                        batch_size = 20
+                        progress_bar = st.progress(0)
+                        
+                        for i in range(0, len(chunks), batch_size):
+                            batch_chunks = chunks[i:i+batch_size]
+                            
+                            # Generate vectors using Pinecone's native model
+                            embeddings = pc.inference.embed(
+                                model="multilingual-e5-large",
+                                inputs=batch_chunks,
+                                parameters={"input_type": "passage"}
+                            )
+                            
+                            # Prepare vectors for database insertion
+                            vectors_to_upsert = []
+                            for j, chunk in enumerate(batch_chunks):
+                                unique_id = f"{uploaded_file.name}_chunk_{i+j}_{str(uuid.uuid4())[:8]}"
+                                vectors_to_upsert.append({
+                                    "id": unique_id,
+                                    "values": embeddings[j].values,
+                                    "metadata": {"text": chunk, "source": uploaded_file.name}
+                                })
+                            
+                            # Fire directly into your Pinecone Index
+                            index.upsert(vectors=vectors_to_upsert)
+                            
+                            # Update progress UI
+                            fraction = min((i + batch_size) / len(chunks), 1.0)
+                            progress_bar.progress(fraction)
+                        
+                        st.success(f"Uplink complete! Permanent indexing successful for: {uploaded_file.name}")
+                        
+                    except Exception as e:
+                        st.error(f"Ingestion Engine Failure: {str(e)}")
+    elif admin_password:
+        st.error("Invalid Security Token. Access Denied.")
