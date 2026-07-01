@@ -248,27 +248,50 @@ with tab2:
     if st.button("Generate Detention Forecast", type="primary"):
         with st.spinner("Calculating Boarding & Detention Probabilities..."):
             try:
+                # 1. Deterministic Python Math Engine (Guarantees consistent scores)
+                base_boarding = 25
+                base_detention = 10
+                
+                # Age Penalty: +1.5% per year (capped at 40%)
+                age_penalty = min(v_age * 1.5, 40)
+                
+                # Flag Penalty
+                flag_penalty = 0
+                if v_flag == "Blacklisted Flag": flag_penalty = 35
+                elif v_flag in ["Panama", "Liberia", "Cyprus"]: flag_penalty = 10
+                
+                # Class Penalty
+                class_penalty = 25 if v_class == "Non-IACS" else 0
+                
+                # Port Agression Penalty
+                port_penalty = 15 if "USCG" in v_port or "Paris" in v_port else 5
+                
+                # Final Calculated Locked Scores
+                calc_boarding = min(int(base_boarding + age_penalty + flag_penalty + port_penalty), 99)
+                calc_detention = min(int(base_detention + (age_penalty * 0.8) + flag_penalty + class_penalty + port_penalty), 99)
+
+                # 2. Database Retrieval
                 search_query = f"Deficiencies and detention targets for {v_type} under {v_flag} flag arriving in {v_port} regarding {v_def}"
                 query_emb = pc.inference.embed(model="multilingual-e5-large", inputs=[search_query], parameters={"input_type": "query"})
                 db_res = index.query(vector=query_emb[0].values, top_k=3, include_metadata=True)
                 ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context found. Defaulting to baseline compliance."
 
-                # The Goldilocks Prompt: Forces Age Math and Specific Equipment Details
+                # 3. The "Locked" LLM Prompt
                 sys_prompt = f"""You are the Vector OS Predictive Risk Engine.
                 Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
                 Context: {ctx}
                 
                 CRITICAL LOGIC RULES:
-                1. AGE MATTERS: 0-5 years old = Low Baseline Risk (<25%). 6-14 years = Medium (25-55%). 15+ years = High (55%+). Adjust strictly from this baseline based on Flag and Port.
-                2. SPECIFICITY: You MUST name exact equipment (e.g., Quick Closing Valves, OWS, ECDIS, Fire Dampers) and specific deficiency codes if known. Do not just say "firefighting system".
-                3. FORMAT: Use crisp, data-dense bullet points (1-2 concise sentences max). No fluff, no introductory or concluding paragraphs.
-                4. DO NOT invent past deficiencies for the specific vessel. You do not have its individual history. You are predicting FUTURE risks based purely on Port trends, Flag, and Age.
+                1. DO NOT invent past deficiencies for this specific vessel. You are predicting FUTURE risks based entirely on Port trends, Flag, and Age.
+                2. USE STRICT MATH: The Boarding Probability is STRICTLY {calc_boarding}%. The Detention Risk is STRICTLY {calc_detention}%. Do not change these numbers.
+                3. SPECIFICITY: You MUST name exact equipment (e.g., Quick Closing Valves, OWS, ECDIS) and specific deficiency codes based on the context.
+                4. FORMAT: Use crisp, data-dense bullet points. Max 20 words per bullet.
                 
                 OUTPUT FORMAT EXACTLY LIKE THIS:
-                **Boarding Probability**: [X]%
+                **Boarding Probability**: {calc_boarding}%
                 * [Provide a specific reason heavily weighting the vessel's age, flag, and port history]
                 
-                **Detention Risk**: [X]%
+                **Detention Risk**: {calc_detention}%
                 * [Provide a specific reason weighing age and operational profile]
                 
                 **Inspector Focus Vectors (Based on {v_port})**: 
@@ -283,20 +306,18 @@ with tab2:
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": "Forecast risk."}],
-                    temperature=0.1 # Lowered temperature to force strictly logical, less creative outputs
+                    temperature=0.0 # Absolute zero creativity for maximum stability
                 )
-                st.markdown(res.choices[0].message.content) 
-                                # --- VERIFICATION AUDIT TRAIL ---
+                st.markdown(res.choices[0].message.content)
+                
+                # --- VERIFICATION AUDIT TRAIL ---
                 st.markdown("---")
                 with st.expander("🔍 Verify AI Intelligence (Raw Database Context)"):
                     st.info("Vector OS generated this forecast strictly from the following encrypted data chunks extracted from your uploaded maritime PDFs:")
                     st.text(ctx)
-
+                    
             except Exception as e:
                 st.error(str(e))
-
-
-
 
 
 # ==========================================
