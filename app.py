@@ -253,38 +253,43 @@ with tab2:
                 db_res = index.query(vector=query_emb[0].values, top_k=3, include_metadata=True)
                 ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context found. Defaulting to baseline compliance."
 
+                # The Goldilocks Prompt: Forces Age Math and Specific Equipment Details
                 sys_prompt = f"""You are the Vector OS Predictive Risk Engine.
                 Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
                 Context: {ctx}
                 
-                CRITICAL RULES:
-                - Output ONLY the exact format below.
-                - Max 10 words per bullet point. NO full sentences.
-                - Be blunt, analytical, and highly technical.
+                CRITICAL LOGIC RULES:
+                1. AGE MATTERS: 0-5 years old = Low Baseline Risk (<25%). 6-14 years = Medium (25-55%). 15+ years = High (55%+). Adjust strictly from this baseline based on Flag and Port.
+                2. SPECIFICITY: You MUST name exact equipment (e.g., Quick Closing Valves, OWS, ECDIS, Fire Dampers) and specific deficiency codes if known. Do not just say "firefighting system".
+                3. FORMAT: Use crisp, data-dense bullet points (1-2 concise sentences max). No fluff, no introductory or concluding paragraphs.
                 
+                OUTPUT FORMAT EXACTLY LIKE THIS:
                 **Boarding Probability**: [X]%
-                * [Primary trigger factor]
+                * [Provide a specific reason heavily weighting the vessel's age, flag, and port history]
                 
                 **Detention Risk**: [X]%
-                * [Primary risk factor]
+                * [Provide a specific reason weighing age and operational profile]
                 
-                **Inspector Focus Vectors**: 
-                * [Target area 1]
-                * [Target area 2]
+                **Inspector Focus Vectors (Based on {v_port})**: 
+                * [Exact Equipment/System 1] - [Why they target it]
+                * [Exact Equipment/System 2] - [Why they target it]
                 
                 **Top 3 Likely Findings**: 
-                1. [Finding] ([X]%)
-                2. [Finding] ([X]%)
-                3. [Finding] ([X]%)"""
+                1. [Specific Component/Deficiency] ([X]%) - [One short actionable fix]
+                2. [Specific Component/Deficiency] ([X]%) - [One short actionable fix]
+                3. [Specific Component/Deficiency] ([X]%) - [One short actionable fix]"""
                 
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": "Forecast risk."}],
-                    temperature=0.2
+                    temperature=0.1 # Lowered temperature to force strictly logical, less creative outputs
                 )
                 st.markdown(res.choices[0].message.content)
             except Exception as e:
                 st.error(str(e))
+
+
+
 
 
 # ==========================================
