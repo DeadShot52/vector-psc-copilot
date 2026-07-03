@@ -263,7 +263,7 @@ with tab2:
                 # Class Penalty
                 class_penalty = 25 if v_class == "Non-IACS" else 0
                 
-                # Port Agression Penalty
+                # Port Aggression Penalty
                 port_penalty = 15 if "USCG" in v_port or "Paris" in v_port else 5
                 
                 # Final Calculated Locked Scores
@@ -276,37 +276,48 @@ with tab2:
                 db_res = index.query(vector=query_emb[0].values, top_k=3, include_metadata=True)
                 ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context found. Defaulting to baseline compliance."
 
-                # 3. The "Locked" LLM Prompt
-                sys_prompt = f"""You are the Vector OS Predictive Risk Engine.
+                # 3. Deep Maritime Tech Prompt
+                sys_prompt = f"""You are the Vector OS Predictive Risk Engine, built for seasoned Technical Superintendents and DPAs.
                 Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
                 Context: {ctx}
                 
-                CRITICAL LOGIC RULES:
-                1. DO NOT invent past deficiencies for this specific vessel. You are predicting FUTURE risks based entirely on Port trends, Flag, and Age.
-                2. USE STRICT MATH: The Boarding Probability is STRICTLY {calc_boarding}%. The Detention Risk is STRICTLY {calc_detention}%. Do not change these numbers.
-                3. SPECIFICITY: You MUST name exact equipment (e.g., Quick Closing Valves, OWS, ECDIS) and specific deficiency codes based on the context.
-                4. FORMAT: Use crisp, data-dense bullet points. Max 20 words per bullet.
+                CRITICAL TECHNICAL RULES:
+                1. NO GENERALITIES: Do not just state broad codes like "SOLAS II-2" or "operational profile". You must name the exact component (e.g., Emergency Fire Pump Isolating Valve, Quick-Closing Valve wire tensioners, Fire Damper coaming flaps, OWS 15ppm alarm microswitch).
+                2. USE STRICT MATH: Boarding Probability is STRICTLY {calc_boarding}%. Detention Risk is STRICTLY {calc_detention}%.
+                3. DETAILED ACTIONABILITY: Every finding must include the specific regulatory code link, the exact mechanical or structural reason for targeting, and a concrete verification step for the ship staff.
+                4. NO PARAGRAPHS: Keep information structured using clear, data-dense lines.
                 
                 OUTPUT FORMAT EXACTLY LIKE THIS:
                 **Boarding Probability**: {calc_boarding}%
-                * [Provide a specific reason heavily weighting the vessel's age, flag, and port history]
+                * **Risk Driver:** [Specific technical explanation of why this age/flag/port combination triggers an inspection]
                 
                 **Detention Risk**: {calc_detention}%
-                * [Provide a specific reason weighing age and operational profile]
+                * **Risk Driver:** [Specific mechanical or systemic exposure that leads to a hardware detention here]
                 
                 **Inspector Focus Vectors (Based on {v_port})**: 
-                * [Exact Equipment/System 1] - [Why they target it]
-                * [Exact Equipment/System 2] - [Why they target it]
+                * **[System Name]** -> [Specific component targeted] | *Target Reason:* [Why inspectors focus on this here]
+                * **[System Name]** -> [Specific component targeted] | *Target Reason:* [Why inspectors focus on this here]
                 
-                **Top 3 Likely Findings**: 
-                1. [Specific Component/Deficiency] ([X]%) - [One short actionable fix]
-                2. [Specific Component/Deficiency] ([X]%) - [One short actionable fix]
-                3. [Specific Component/Deficiency] ([X]%) - [One short actionable fix]"""
+                **Top 3 High-Probability Findings & Corrective Actions**: 
+                1. 🔴 **Deficiency Item:** [Name specific hardware/component] ([X]%)
+                   * **Code:** [Exact Code, e.g., SOLAS II-2 Reg 10.2 / MARPOL Annex V]
+                   * **The Vulnerability:** [Exactly what fails - e.g., corroded spring pins, dried sealing rings, seized linkage]
+                   * **DPA Action Directive:** [Precise maintenance instruction for the crew to fix/verify it immediately]
+                
+                2. 🟡 **Deficiency Item:** [Name specific hardware/component] ([X]%)
+                   * **Code:** [Exact Code]
+                   * **The Vulnerability:** [Exactly what fails]
+                   * **DPA Action Directive:** [Precise maintenance instruction for the crew]
+                
+                3. 🟡 **Deficiency Item:** [Name specific hardware/component] ([X]%)
+                   * **Code:** [Exact Code]
+                   * **The Vulnerability:** [Exactly what fails]
+                   * **DPA Action Directive:** [Precise maintenance instruction for the crew]"""
                 
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": "Forecast risk."}],
-                    temperature=0.0 # Absolute zero creativity for maximum stability
+                    temperature=0.0
                 )
                 st.markdown(res.choices[0].message.content)
                 
@@ -318,6 +329,7 @@ with tab2:
                     
             except Exception as e:
                 st.error(str(e))
+
 
 
 # ==========================================
