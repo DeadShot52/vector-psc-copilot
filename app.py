@@ -151,16 +151,20 @@ v_class = col5.selectbox("Class Society", ["IACS", "Non-IACS"])
 v_def = col6.text_input("Last Deficiencies (Optional)", "e.g., Fire doors, OWS")
 
 if st.button("Generate Detention Forecast", type="primary"):
-    with st.spinner("Calculating Boarding & Detention Probabilities..."):
+    with st.spinner("Analyzing Database & Generating Risk Matrices..."):
         try:
-            # DETERMINISTIC MATH ENGINE (Hull-Port Matrix)
+            # 1. DETERMINISTIC MATH ENGINE
             base_boarding = 20
             base_detention = 5
             
-            if v_age <= 5: age_penalty = 5
-            elif v_age <= 12: age_penalty = 15
-            elif v_age <= 20: age_penalty = 28
-            else: age_penalty = 40
+            if v_age <= 5:
+                age_penalty = v_age * 1.2
+            elif v_age <= 15:
+                age_penalty = 6 + ((v_age - 5) * 1.8)
+            else:
+                age_penalty = 24 + ((v_age - 15) * 2.5)
+                
+            age_penalty = min(age_penalty, 45)
             
             flag_penalty = 35 if v_flag == "Blacklisted Flag" else (12 if v_flag in ["Panama", "Liberia", "Cyprus"] else 0)
             class_penalty = 30 if v_class == "Non-IACS" else 0
@@ -173,58 +177,78 @@ if st.button("Generate Detention Forecast", type="primary"):
             calc_boarding = min(int(base_boarding + age_penalty + flag_penalty + matrix_penalty), 99)
             calc_detention = min(int(base_detention + (age_penalty * 0.7) + flag_penalty + class_penalty + (matrix_penalty * 0.5)), 99)
 
-            # RAG DATABASE RETRIEVAL
+            # 2. RAG DATABASE RETRIEVAL
             search_query = f"Deficiencies and detention targets for {v_type} under {v_flag} flag arriving in {v_port} regarding {v_def}"
             query_emb = pc.inference.embed(model="multilingual-e5-large", inputs=[search_query], parameters={"input_type": "query"})
             db_res = index.query(vector=query_emb[0].values, top_k=3, include_metadata=True)
             ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context found. Defaulting to baseline compliance."
 
-            # DEEP TECHNICAL PROMPT
+            # 3. FORECAST GENERATION
             sys_prompt = f"""You are the VectorPrime Predictive Risk Engine, built for Technical Superintendents.
-            Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. 
-            Context: {ctx}
+            Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Class: {v_class}, Port: {v_port}. Context: {ctx}
             
             CRITICAL TECHNICAL RULES:
-            1. NO GENERALITIES: Name the exact component (e.g., Emergency Fire Pump Isolating Valve, Quick-Closing Valve wire tensioners, Fire Damper coaming flaps, OWS 15ppm alarm microswitch).
+            1. NO GENERALITIES: Name exact components.
             2. USE STRICT MATH: Boarding Probability is STRICTLY {calc_boarding}%. Detention Risk is STRICTLY {calc_detention}%. Do not change these numbers.
-            3. DETAILED ACTIONABILITY: Every finding must include the specific regulatory code link, the exact mechanical reason for targeting, and a concrete verification step for the ship staff.
-            4. DO NOT INVENT PAST DEFICIENCIES: You do not know the ship's specific history. Predict future risk based purely on Port trends in the provided Context.
+            3. DETAILED ACTIONABILITY: Include specific regulatory code links and exact mechanical vulnerabilities.
+            4. DO NOT INVENT PAST DEFICIENCIES. Predict future risk based on Port trends.
             
             OUTPUT FORMAT EXACTLY LIKE THIS:
             **Boarding Probability**: {calc_boarding}%
-            * **Risk Driver:** [Specific technical explanation of why this age/flag/port combination triggers an inspection]
+            * **Risk Driver:** [Specific technical explanation]
             
             **Detention Risk**: {calc_detention}%
-            * **Risk Driver:** [Specific mechanical or systemic exposure that leads to a hardware detention here]
+            * **Risk Driver:** [Specific mechanical/systemic exposure]
             
             **Inspector Focus Vectors (Based on {v_port})**: 
-            * **[System Name]** -> [Specific component targeted] | *Target Reason:* [Why inspectors focus on this here]
-            * **[System Name]** -> [Specific component targeted] | *Target Reason:* [Why inspectors focus on this here]
+            * **[System Name]** -> [Specific component targeted] | *Target Reason:* [Why]
+            * **[System Name]** -> [Specific component targeted] | *Target Reason:* [Why]
             
             **Top 3 High-Probability Findings & Corrective Actions**: 
-            1. 🔴 **Deficiency Item:** [Name specific hardware/component] ([X]%)
-               * **Code:** [Exact Code, e.g., SOLAS II-2 Reg 10.2 / MARPOL Annex V]
-               * **The Vulnerability:** [Exactly what fails - e.g., corroded spring pins, dried sealing rings, seized linkage]
-               * **DPA Action Directive:** [Precise maintenance instruction for the crew to fix/verify it immediately]
-            
-            2. 🟡 **Deficiency Item:** [Name specific hardware/component] ([X]%)
+            1. 🔴 **Deficiency Item:** [Name specific hardware/component]
                * **Code:** [Exact Code]
                * **The Vulnerability:** [Exactly what fails]
-               * **DPA Action Directive:** [Precise maintenance instruction for the crew]
-            
-            3. 🟡 **Deficiency Item:** [Name specific hardware/component] ([X]%)
+               * **DPA Action Directive:** [Precise maintenance instruction]
+            2. 🟡 **Deficiency Item:** [Name specific hardware/component]
                * **Code:** [Exact Code]
                * **The Vulnerability:** [Exactly what fails]
-               * **DPA Action Directive:** [Precise maintenance instruction for the crew]"""
+               * **DPA Action Directive:** [Precise maintenance instruction]
+            3. 🟡 **Deficiency Item:** [Name specific hardware/component]
+               * **Code:** [Exact Code]
+               * **The Vulnerability:** [Exactly what fails]
+               * **DPA Action Directive:** [Precise maintenance instruction]"""
             
-            res = client.chat.completions.create(
+            res_forecast = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": "Forecast risk."}],
                 temperature=0.0
             )
-            st.markdown(res.choices[0].message.content)
+            st.markdown(res_forecast.choices[0].message.content)
             
+            # 4. TAILORED SHIPBOARD CHECKLIST GENERATOR
+            checklist_prompt = f"""You are a strict Master Mariner generating a pre-arrival checklist for the Chief Engineer and Master.
+            Vessel: {v_age}yr old {v_type}. Port of Call: {v_port}. Context: {ctx}
+            
+            RULES:
+            1. Output ONLY markdown checkboxes (format: `- [ ] Action item`)
+            2. Group by exactly 3 categories: **Engine Room**, **Deck & Safety**, and **Documentation & SMS**.
+            3. Target the exact vulnerabilities that {v_port} inspectors look for on {v_type}s of this age based on the context provided.
+            4. Make the items highly operational (e.g. "Test emergency fire pump suction valve for free movement" instead of "Check fire pump").
+            5. Provide exactly 4 items per category. NO intro or outro text."""
+            
+            res_checklist = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "system", "content": checklist_prompt}, {"role": "user", "content": "Generate checklist."}],
+                temperature=0.1
+            )
+            
+            # --- THE NEW TAILORED CHECKLIST EXPANDER ---
             st.markdown("---")
+            with st.expander("📋 View Tailored Shipboard Pre-Arrival Checklist", expanded=False):
+                st.info(f"**Customized for a {v_age}-year-old {v_type} arriving at {v_port}** - Print and execute prior to pilot boarding.")
+                st.markdown(res_checklist.choices[0].message.content)
+            
+            # --- VERIFICATION AUDIT TRAIL ---
             with st.expander("🔍 Verify AI Intelligence (Raw Database Context)"):
                 st.info("VectorPrime generated this forecast strictly from the following encrypted data chunks extracted from your uploaded maritime PDFs:")
                 st.text(ctx)
