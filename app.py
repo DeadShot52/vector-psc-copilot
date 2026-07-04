@@ -225,28 +225,71 @@ if st.button("Generate Detention Forecast", type="primary"):
             )
             st.markdown(res_forecast.choices[0].message.content)
             
-            # 4. TAILORED SHIPBOARD CHECKLIST GENERATOR
-            checklist_prompt = f"""You are a strict Master Mariner generating a pre-arrival checklist for the Chief Engineer and Master.
-            Vessel: {v_age}yr old {v_type}. Port of Call: {v_port}. Context: {ctx}
+            
+            # 4. TAILORED SHIPBOARD CHECKLIST GENERATOR (JSON Format for Interactive UI)
+            checklist_prompt = f"""You are a strict Master Mariner generating a pre-arrival checklist.
+            Vessel: {v_age}yr old {v_type}. Port: {v_port}.
             
             RULES:
-            1. Output ONLY markdown checkboxes (format: `- [ ] Action item`)
-            2. Group by exactly 3 categories: **Engine Room**, **Deck & Safety**, and **Documentation & SMS**.
-            3. Target the exact vulnerabilities that {v_port} inspectors look for on {v_type}s of this age based on the context provided.
-            4. Make the items highly operational (e.g. "Test emergency fire pump suction valve for free movement" instead of "Check fire pump").
-            5. Provide exactly 4 items per category. NO intro or outro text."""
+            1. Output ONLY a raw, valid Python list of strings. Do not use markdown. Do not include introductory text.
+            2. Provide exactly 6 highly specific, operational action items based on {v_port} vulnerabilities for this ship.
+            3. Example format: ["Test emergency fire pump suction valve", "Verify OWS 15ppm alarm", "Check fire damper coaming flaps"]"""
             
             res_checklist = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": checklist_prompt}, {"role": "user", "content": "Generate checklist."}],
-                temperature=0.1
+                temperature=0.0
             )
             
-            # --- THE NEW TAILORED CHECKLIST EXPANDER ---
+            # Safely parse the AI output into a Python list
+            import ast
+            try:
+                raw_output = res_checklist.choices[0].message.content.strip()
+                # Clean up if the AI accidentally adds markdown code blocks
+                if raw_output.startswith("```"):
+                    raw_output = raw_output.split("\n", 1)[1].rsplit("\n", 1)[0]
+                checklist_items = ast.literal_eval(raw_output)
+            except:
+                # Fallback if parsing fails
+                checklist_items = ["Verify OWS calibration", "Test emergency fire pump", "Inspect fire dampers", "Check ECDIS passage plan"]
+
+            # --- THE INTERACTIVE COMPLIANCE WORKFLOW ---
             st.markdown("---")
-            with st.expander("📋 View Tailored Shipboard Pre-Arrival Checklist", expanded=False):
-                st.info(f"**Customized for a {v_age}-year-old {v_type} arriving at {v_port}** - Print and execute prior to pilot boarding.")
-                st.markdown(res_checklist.choices[0].message.content)
+            st.subheader("📋 Digital SMS Compliance Workflow")
+            st.info("Execute checklist, document findings, and submit to DPA for arrival clearance.")
+            
+            with st.form("compliance_report_form"):
+                st.markdown("#### Engine & Deck Pre-Arrival Audit")
+                
+                # Dynamically generate checkboxes and comment fields based on AI output
+                for i, item in enumerate(checklist_items):
+                    col_check, col_comment = st.columns([2, 2])
+                    with col_check:
+                        st.checkbox(f"**{item}**", key=f"check_{i}")
+                    with col_comment:
+                        st.text_input("Deficiency/Action Taken (Optional)", key=f"comment_{i}", placeholder="e.g., Valve greased, operating normally.")
+                
+                st.markdown("---")
+                st.markdown("#### Final Observations & Master's Authorization")
+                
+                # Compulsory Fleet Feedback
+                overall_comments = st.text_area("Chief Engineer / Chief Officer Final Observations (Required)", placeholder="Summarize overall readiness state...")
+                
+                # Authorization Block
+                col_sig, col_pin = st.columns(2)
+                master_sig = col_sig.text_input("Master's E-Signature")
+                master_pin = col_pin.text_input("Master's Authorization PIN", type="password")
+                
+                submit_report = st.form_submit_button("Transmit DPA Arrival Report", type="primary", use_container_width=True)
+                
+                if submit_report:
+                    if not overall_comments or not master_sig or not master_pin:
+                        st.error("Submission Failed: Final observations, E-Signature, and Master's PIN are compulsory.")
+                    elif master_pin != "1234": # Hardcoded PIN for the beta demo
+                        st.error("Submission Failed: Invalid Master's Authorization PIN.")
+                    else:
+                        st.success("✅ Report securely transmitted to DPA Dashboard.")
+                        st.balloons()
             
             # --- VERIFICATION AUDIT TRAIL ---
             with st.expander("🔍 Verify AI Intelligence (Raw Database Context)"):
@@ -255,6 +298,7 @@ if st.button("Generate Detention Forecast", type="primary"):
                 
         except Exception as e:
             st.error(str(e))
+
 
 
 # ==========================================
