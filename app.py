@@ -6,6 +6,71 @@ import requests
 import PyPDF2
 import uuid
 
+def calculate_vector_risk_score(vessel_age, flag_state, target_port, past_deficiencies_count, vessel_type):
+    risk_score = 0
+    risk_factors = []
+
+    # 1. Vessel Age Multiplier (Max 20 pts)
+    if vessel_age >= 15:
+        risk_score += 20
+        risk_factors.append(f"Critical Age ({vessel_age} years) -> +20 pts")
+    elif vessel_age >= 10:
+        risk_score += 10
+        risk_factors.append(f"Moderate Age ({vessel_age} years) -> +10 pts")
+
+    # 2. Flag State Matrix (Dictionary Lookup - Max 30 pts)
+    # This maps specific flags to their Paris/Tokyo MOU BGW status
+    flag_bgw_mapping = {
+        'Togo': 'BLACK', 'Comoros': 'BLACK', 
+        'Panama': 'GREY', 'Liberia': 'GREY',
+        'Marshall Islands': 'WHITE'
+    }
+    flag_status = flag_bgw_mapping.get(flag_state, 'WHITE') # Defaults to White if not found
+    
+    if flag_status == 'BLACK':
+        risk_score += 30
+        risk_factors.append(f"Black-Listed Flag ({flag_state}) -> +30 pts")
+    elif flag_status == 'GREY':
+        risk_score += 15
+        risk_factors.append(f"Grey-Listed Flag ({flag_state}) -> +15 pts")
+
+    # 3. Port Stringency Matrix (Max 20 pts)
+    strict_ports = ['Rotterdam', 'Singapore', 'Houston', 'Brisbane']
+    if target_port in strict_ports:
+        risk_score += 20
+        risk_factors.append(f"High-Stringency Target Port ({target_port}) -> +20 pts")
+
+    # 4. Vessel Type Hazard Multiplier (Max 15 pts)
+    vessel_type_weights = {
+        'Chemical Tanker': 15,
+        'Gas Carrier': 15,
+        'Bulk Carrier': 10,
+        'Container': 5
+    }
+    type_weight = vessel_type_weights.get(vessel_type, 0)
+    if type_weight > 0:
+        risk_score += type_weight
+        risk_factors.append(f"High-Scrutiny Vessel Type ({vessel_type}) -> +{type_weight} pts")
+
+    # 5. Historical Deficiency Penalty (Max 15 pts)
+    if past_deficiencies_count >= 5:
+        risk_score += 15
+        risk_factors.append(f"High Deficiency History ({past_deficiencies_count} found) -> +15 pts")
+
+    # Ensure score does not accidentally exceed 100
+    risk_score = min(risk_score, 100)
+
+    # 6. Final Category Determination
+    if risk_score >= 75:
+        category = "CRITICAL RISK - High Probability of Detention"
+    elif risk_score >= 45:
+        category = "MODERATE RISK - Heightened Inspection Probability"
+    else:
+        category = "LOW RISK - Standard Clearance Expected"
+
+    return risk_score, category, risk_factors
+
+
 # --- CONFIGURATION & UI ---
 st.set_page_config(page_title="VectorPrime | PSC Intelligence", page_icon="⚓", layout="wide")
 
