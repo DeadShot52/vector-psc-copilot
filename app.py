@@ -70,6 +70,15 @@ def calculate_vector_risk_score(vessel_age, flag_state, target_port, past_defici
 
     return risk_score, category, risk_factors
 
+@st.cache_data
+def load_vessel_database():
+    # This reads your local CSV file into a pandas DataFrame
+    df = pd.read_csv("fleet_data.csv")
+    return df
+
+# Load the database into memory
+vessel_db = load_vessel_database()
+
 
 # --- CONFIGURATION & UI ---
 st.set_page_config(page_title="VectorPrime | PSC Intelligence", page_icon="⚓", layout="wide")
