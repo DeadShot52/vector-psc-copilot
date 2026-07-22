@@ -2,5 +2,5 @@ streamlit
 pandas
 fpdf
 groq
-pinecone-client
+pinecone
 PyPDF2
