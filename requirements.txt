@@ -1,7 +1,6 @@
 streamlit
-pinecone
-langchain-text-splitters
+pandas
+fpdf
 groq
+pinecone-client
 PyPDF2
-requests
-pycryptodome
