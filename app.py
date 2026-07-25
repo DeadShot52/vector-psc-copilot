@@ -4,8 +4,6 @@ from fpdf import FPDF
 from groq import Groq
 from pinecone import Pinecone, ServerlessSpec
 from datetime import datetime
-import PyPDF2
-import uuid
 import ast
 
 # ==========================================
@@ -80,7 +78,7 @@ def generate_pdf_report(v_name, imo, score, category, ai_forecast):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="VECTORPRIME: PSC INTELLIGENCE REPORT", ln=True, align='C')
+    pdf.cell(200, 10, txt="VECTOR OS: PSC INTELLIGENCE REPORT", ln=True, align='C')
     
     pdf.set_font("Arial", '', 12)
     pdf.cell(200, 10, txt=f"Vessel: {v_name} (IMO: {imo})", ln=True)
@@ -103,14 +101,14 @@ vessel_db = load_vessel_database()
 # ==========================================
 # 2. CONFIGURATION & UI
 # ==========================================
-st.set_page_config(page_title="VectorPrime | PSC Intelligence", page_icon="⚓", layout="wide")
+st.set_page_config(page_title="Vector OS | PSC Intelligence", page_icon="⚓", layout="wide")
 
 # ... [Keep your existing CSS markdown here for brevity] ...
 
 try:
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
     pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
-    index_name = "vector-core-v1"
+    index_name = "maritime-regulations" # FIXED: Now matches rag_engine.py
     index = pc.Index(index_name)
 except Exception as e:
     st.error(f"SYSTEM OFFLINE: {str(e)}")
@@ -119,7 +117,7 @@ except Exception as e:
 # ==========================================
 # 3. CORE APPLICATION: PSC DIGITAL TWIN
 # ==========================================
-st.title("⚓ VECTORPRIME: PREDICTIVE PSC INTELLIGENCE")
+st.title("⚓ VECTOR OS: PREDICTIVE PSC INTELLIGENCE")
 st.markdown("Enter an IMO number to query the offline database and calculate detention probabilities.")
 
 if "vessel_data" not in st.session_state:
@@ -181,7 +179,7 @@ if st.session_state.vessel_data:
                 ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context found."
 
                 # 3. FORECAST GENERATION
-                sys_prompt = f"""You are the VectorPrime Predictive Risk Engine. Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Port: {v_port}. Context: {ctx}
+                sys_prompt = f"""You are the Vector OS Predictive Risk Engine. Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Port: {v_port}. Context: {ctx}
                 Provide a highly technical list of Inspector Focus Vectors and Top 3 Corrective Actions."""
                 
                 res_forecast = client.chat.completions.create(
@@ -202,9 +200,10 @@ if st.session_state.vessel_data:
                 st.download_button(
                     label="📄 Download Official DPA Risk Report",
                     data=pdf_bytes,
-                    file_name=f"VectorPrime_Report_{target_imo}.pdf",
+                    file_name=f"VectorOS_Report_{target_imo}.pdf",
                     mime="application/pdf"
                 )
 
             except Exception as e:
                 st.error(f"Execution Error: {str(e)}")
+    
