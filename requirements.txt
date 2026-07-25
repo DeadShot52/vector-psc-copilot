@@ -1,6 +1,6 @@
-streamlit
-pandas
-fpdf
-groq
-pinecone
-PyPDF2
+streamlit>=1.31.0
+pandas>=2.0.0
+fpdf2>=2.7.4
+groq>=0.4.1
+pinecone-client>=3.0.0
+langchain-text-splitters>=0.0.1
