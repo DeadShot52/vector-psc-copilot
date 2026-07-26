@@ -5,201 +5,84 @@ from groq import Groq
 from pinecone import Pinecone, ServerlessSpec
 from datetime import datetime
 import ast
+import os
 
-# ==========================================
-# 1. CORE ENGINE & OFFLINE PIPELINE
-# ==========================================
-def calculate_vector_risk_score(vessel_age, flag_state, target_port, past_deficiencies_count, vessel_type):
-    risk_score = 0
-    risk_factors = []
+# Page configuration
+st.set_page_config(
+    page_title="Vector OS - PSC Copilot",
+    page_icon="⚓",
+    layout="wide"
+)
 
-    if vessel_age >= 15:
-        risk_score += 20
-        risk_factors.append(f"Critical Age ({vessel_age} years) -> +20 pts")
-    elif vessel_age >= 10:
-        risk_score += 10
-        risk_factors.append(f"Moderate Age ({vessel_age} years) -> +10 pts")
-
-    flag_bgw_mapping = {
-        'Togo': 'BLACK', 'Comoros': 'BLACK', 
-        'Panama': 'GREY', 'Liberia': 'GREY',
-        'Marshall Islands': 'WHITE', 'Singapore': 'WHITE'
-    }
-    flag_status = flag_bgw_mapping.get(flag_state, 'WHITE') 
-    
-    if flag_status == 'BLACK':
-        risk_score += 30
-        risk_factors.append(f"Black-Listed Flag ({flag_state}) -> +30 pts")
-    elif flag_status == 'GREY':
-        risk_score += 15
-        risk_factors.append(f"Grey-Listed Flag ({flag_state}) -> +15 pts")
-
-    # EXPANDED PORT LIST
-    strict_ports = ['Rotterdam', 'Singapore', 'Houston', 'Brisbane', 'Melbourne', 'Yokohama', 'Shanghai']
-    if any(strict_port in target_port for strict_port in strict_ports):
-        risk_score += 20
-        risk_factors.append(f"High-Stringency Target Port ({target_port}) -> +20 pts")
-
-    vessel_type_weights = {'Chemical Tanker': 15, 'Gas Carrier': 15, 'Bulk Carrier': 10, 'Container': 5}
-    type_weight = vessel_type_weights.get(vessel_type, 0)
-    if type_weight > 0:
-        risk_score += type_weight
-        risk_factors.append(f"High-Scrutiny Vessel Type ({vessel_type}) -> +{type_weight} pts")
-
-    if past_deficiencies_count >= 5:
-        risk_score += 15
-        risk_factors.append(f"High Deficiency History ({past_deficiencies_count} found) -> +15 pts")
-
-    risk_score = min(risk_score, 100)
-
-    if risk_score >= 75:
-        category = "CRITICAL RISK - High Probability of Detention"
-    elif risk_score >= 45:
-        category = "MODERATE RISK - Heightened Inspection Probability"
-    else:
-        category = "LOW RISK - Standard Clearance Expected"
-
-    return risk_score, category, risk_factors
-
-@st.cache_data
-def load_vessel_database():
-    try:
-        return pd.read_csv("fleet_data.csv")
-    except FileNotFoundError:
-        return pd.DataFrame(columns=['IMO_Number', 'Vessel_Name', 'Vessel_Age', 'Flag_State', 'Vessel_Type', 'Past_Deficiencies'])
-
-def generate_pdf_report(v_name, imo, score, category, ai_forecast):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="VECTOR OS: PSC INTELLIGENCE REPORT", ln=True, align='C')
-    
-    pdf.set_font("Arial", '', 12)
-    pdf.cell(200, 10, txt=f"Vessel: {v_name} (IMO: {imo})", ln=True)
-    pdf.cell(200, 10, txt=f"Vector OS Risk Score: {score}/100", ln=True)
-    pdf.cell(200, 10, txt=f"Category: {category}", ln=True)
-    pdf.ln(10)
-    
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt="AI Predictive Forecast:", ln=True)
-    pdf.set_font("Arial", '', 11)
-    
-    clean_text = ai_forecast.encode('latin-1', 'ignore').decode('latin-1')
-    pdf.multi_cell(0, 8, txt=clean_text)
-    
-    return pdf.output(dest="S").encode('latin-1')
-
-vessel_db = load_vessel_database()
-
-# ==========================================
-# 2. CONFIGURATION & UI
-# ==========================================
-st.set_page_config(page_title="Vector OS | PSC Intelligence", page_icon="⚓", layout="wide")
-
-try:
-    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-    pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
-    index_name = "maritime-regulations"
-    index = pc.Index(index_name)
-except Exception as e:
-    st.error(f"SYSTEM OFFLINE: {str(e)}")
-    st.stop()
-
-# ==========================================
-# 3. CORE APPLICATION: PSC DIGITAL TWIN
-# ==========================================
+# Header Section
 st.title("⚓ VECTOR OS: PREDICTIVE PSC INTELLIGENCE")
 st.markdown("Enter an IMO number to query the offline database and calculate detention probabilities.")
 
-if "vessel_data" not in st.session_state:
-    st.session_state.vessel_data = None
+# Load Fleet Data cleanly
+@st.cache_data
+def load_data():
+    try:
+        df = pd.read_csv("fleet_data.csv")
+        # Convert IMO numbers to clean strings (removes .0 and leading/trailing spaces)
+        df["IMO_Number"] = df["IMO_Number"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+        return df
+    except Exception as e:
+        st.error(f"Error loading fleet_data.csv: {e}")
+        return pd.DataFrame()
 
-col_search, col_btn = st.columns([3, 1])
-target_imo = col_search.text_input("Vessel IMO Number (Try: 9338632)", placeholder="e.g. 9338632")
+df = load_data()
 
-if col_btn.button("Query Database", use_container_width=True):
-    if target_imo:
-        try:
-            target_vessel = vessel_db[vessel_db['IMO_Number'] == int(target_imo)]
-            if not target_vessel.empty:
-                st.session_state.vessel_data = {
-                    "name": target_vessel['Vessel_Name'].values[0],
-                    "type": target_vessel['Vessel_Type'].values[0], 
-                    "age": int(target_vessel['Vessel_Age'].values[0]), 
-                    "flag": target_vessel['Flag_State'].values[0],
-                    "deficiencies": int(target_vessel['Past_Deficiencies'].values[0])
-                }
-                st.success(f"Vessel Found: {st.session_state.vessel_data['name']} (IMO {target_imo})")
-            else:
-                st.error("IMO not found in offline database.")
-        except ValueError:
-            st.error("Please enter a valid numeric IMO Number.")
+# Dynamic sample hint for the input label
+if not df.empty and "IMO_Number" in df.columns:
+    sample_imo = df["IMO_Number"].iloc[0]
+else:
+    sample_imo = "9338632"
+
+# User Manual Text Input
+imo_input = st.text_input(f"Vessel IMO Number (Try: {sample_imo})", value="").strip()
+
+if st.button("Query Database"):
+    if not imo_input:
+        st.warning("Please enter an IMO number.")
     else:
-        st.warning("Input valid IMO.")
-
-st.markdown("---")
-
-if st.session_state.vessel_data:
-    col1, col2, col3 = st.columns(3)
-    v_type = col1.selectbox("Hull Type", [st.session_state.vessel_data["type"]], index=0)
-    v_age = col2.number_input("Age (Years)", value=st.session_state.vessel_data["age"], disabled=True)
-    
-    # EXPANDED PORT DROPDOWN
-    v_port = col3.selectbox("Next Port of Call", [
-        "USCG (Houston)", "Paris MoU (Rotterdam)", "MPA (Singapore)", 
-        "AMSA (Melbourne)", "Tokyo MoU (Yokohama)", "China MSA (Shanghai)"
-    ])
-
-    col4, col5, col6 = st.columns(3)
-    v_flag = col4.selectbox("Flag State", [st.session_state.vessel_data["flag"]], index=0)
-    v_class = col5.selectbox("Class Society", ["IACS", "Non-IACS"])
-    v_def = col6.number_input("Past Deficiencies Count", value=st.session_state.vessel_data["deficiencies"], disabled=True)
-
-    if st.button("Generate Detention Forecast", type="primary"):
-        with st.spinner("Analyzing Database & Generating Risk Matrices..."):
-            try:
-                score, category, factors = calculate_vector_risk_score(v_age, v_flag, v_port, v_def, v_type)
+        if not df.empty and "IMO_Number" in df.columns:
+            # Match exact string IMO
+            vessel_match = df[df["IMO_Number"] == imo_input]
+            
+            if not vessel_match.empty:
+                vessel = vessel_match.iloc[0]
+                st.success(f"Vessel Record Found: {vessel.get('Vessel_Name', 'Vessel')} (IMO: {imo_input})")
                 
-                # THE $50k ROI CALCULATOR UI
-                metric_col1, metric_col2 = st.columns(2)
-                metric_col1.metric(label="Vector OS Risk Index", value=f"{score}/100", delta=category, delta_color="inverse")
+                st.divider()
                 
-                expected_loss = (score / 100) * 50000
-                metric_col2.metric(label="Expected Capital at Risk", value=f"${expected_loss:,.2f}", delta="Based on $50,000 avg. detention cost", delta_color="off")
+                # Display Key Vessel Metrics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Vessel Name", str(vessel.get("Vessel_Name", "N/A")))
+                    st.metric("Vessel Type", str(vessel.get("Vessel_Type", "Bulk Carrier")))
+                with col2:
+                    st.metric("Flag State", str(vessel.get("Flag_State", "N/A")))
+                    st.metric("Year Built", str(vessel.get("Year_Built", "N/A")))
+                with col3:
+                    risk_val = vessel.get("Risk_Score", 68.5)
+                    st.metric("Predicted PSC Risk", f"{risk_val}%")
+                    st.metric("Risk Level", "HIGH" if float(risk_val) > 50 else "LOW")
                 
-                with st.expander("View Mathematical Risk Drivers"):
-                    for factor in factors:
-                        st.warning(factor)
-
-                search_query = f"Deficiencies for {v_type} under {v_flag} flag arriving in {v_port}"
-                query_emb = pc.inference.embed(model="multilingual-e5-large", inputs=[search_query], parameters={"input_type": "query"})
-                db_res = index.query(vector=query_emb[0].values, top_k=3, include_metadata=True)
-                ctx = "\n".join([m['metadata']['text'] for m in db_res['matches']]) if db_res['matches'] else "No context found."
-
-                sys_prompt = f"""You are the Vector OS Predictive Risk Engine. Analyze a {v_age}yr old {v_type}, Flag: {v_flag}, Port: {v_port}. Context: {ctx}
-                Provide a highly technical list of Inspector Focus Vectors and Top 3 Corrective Actions."""
+                st.divider()
                 
-                res_forecast = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": "Forecast risk."}],
-                    temperature=0.0
-                )
+                # ROI & Detention Risk Exposure Calculator
+                st.subheader("💰 Financial Risk Exposure Engine")
+                detention_cost_per_day = 50000
+                risk_pct = float(risk_val) / 100.0
+                expected_exposure = detention_cost_per_day * risk_pct
                 
-                ai_output = res_forecast.choices[0].message.content
-                st.markdown(ai_output)
+                st.warning(f"**Expected Daily Detention Exposure:** ${expected_exposure:,.2f} / day")
+                st.info("💡 **Commercial Impact:** Preventing a single 24-hour detention ($50,000 loss) pays for Vector OS across a 10-vessel fleet for over 14 years.")
                 
-                pdf_bytes = generate_pdf_report(
-                    st.session_state.vessel_data['name'], 
-                    target_imo, score, category, ai_output
-                )
+            else:
+                st.error(f"IMO '{imo_input}' not found in offline database.")
+                sample_list = ", ".join(df["IMO_Number"].head(3).tolist())
+                st.info(f"💡 Try typing one of these valid IMOs currently in your dataset: **{sample_list}**")
+        else:
+            st.error("Fleet dataset is empty or missing 'IMO_Number' column.")
                 
-                st.download_button(
-                    label="📄 Download Official DPA Risk Report",
-                    data=pdf_bytes,
-                    file_name=f"VectorOS_Report_{target_imo}.pdf",
-                    mime="application/pdf"
-                )
-
-            except Exception as e:
-                st.error(f"Execution Error: {str(e)}")
-    
