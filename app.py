@@ -33,7 +33,7 @@ def load_fleet_data():
         return pd.DataFrame()
 df = load_fleet_data()
 # ==========================================
-# MAIN UI CONTROLS (Moved from Sidebar for Mobile)
+# MAIN UI CONTROLS 
 # ==========================================
 st.title("⚓ VECTOR OS: PSC INTELLIGENCE")
 st.markdown("Data-centric target deficiency prediction.")
@@ -57,7 +57,7 @@ with st.container(border=True):
     groq_api_key = os.environ.get("GROQ_API_KEY") or st.text_input("Groq API Key (Optional)", type="password", placeholder="Enter key for live AI analytics")
     run_audit = st.button("RUN PREDICTIVE AUDIT", type="primary")
 # ==========================================
-# DYNAMIC ENGINE (MINIMAL DATA FORMAT)
+# DYNAMIC ENGINE
 # ==========================================
 def get_data_centric_priorities(vessel_type, vessel_age, target_port, regime, groq_key):
     if groq_key:
@@ -81,7 +81,7 @@ def get_data_centric_priorities(vessel_type, vessel_age, target_port, regime, gr
             )
             return response.choices[0].message.content
         except Exception:
-            pass # Fallback below
+            pass 
     # Minimal Fallback Table
     return f"""
 
@@ -118,7 +118,7 @@ if run_audit or imo_input:
             adjusted_risk = min(round(base_risk * port_info["multiplier"], 1), 98.0)
             
             st.divider()
-            # --- 1. METRICS (Clean Data View) ---
+            # --- 1. METRICS ---
             st.subheader(f"📊 Fleet Data: {vessel_name}")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Type", vessel_type)
@@ -131,14 +131,12 @@ if run_audit or imo_input:
                 findings_table = get_data_centric_priorities(vessel_type, vessel_age, selected_port, port_info["regime"], groq_api_key)
             st.markdown(findings_table)
             st.divider()
-            # --- 3. FIX: Q&A SECTION WITH DEDICATED SUBMIT BUTTON ---
+            # --- 3. Q&A SECTION ---
             st.subheader("Terminal: Regulation Query")
             
             with st.form("qna_form"):
                 st.caption("Enter deficiency code or regulation focus (e.g., 'Emergency generator SOLAS Ch II-1'):")
                 query_input = st.text_input("Query:", label_visibility="collapsed")
-                
-                # Dedicated button inside the form
                 submit_query = st.form_submit_button("Query Vector AI")
                 
                 if submit_query and query_input:
@@ -165,19 +163,61 @@ if run_audit or imo_input:
             expected_exposure = 50000 * (adjusted_risk / 100.0)
             st.error(f"**Calculated Detention Exposure:** ${expected_exposure:,.2f} / day")
             
-            # --- 5. FIX: PDF GENERATOR BYTE ERROR ---
-            def create_pdf():
+            # --- 5. ROBUST PDF GENERATOR ---
+            def create_pdf(findings_text):
                 pdf = FPDF()
                 pdf.add_page()
-                pdf.set_font("Arial", 'B', 14)
-                pdf.cell(0, 8, f"Vector OS - Audit Briefing: {vessel_name}", ln=True)
-                pdf.set_font("Arial", '', 10)
-                pdf.cell(0, 6, f"Port: {selected_port} | Risk Score: {adjusted_risk}%", ln=True)
-                pdf.ln(5)
-                pdf.set_font("Arial", 'B', 10)
-                pdf.cell(0, 6, "See web dashboard for granular deficiency matrix.", ln=True)
                 
-                # Fix for the bytearray error
+                # Header
+                pdf.set_font("Arial", 'B', 16)
+                pdf.cell(0, 10, f"VECTOR OS - PREDICTIVE PSC AUDIT BRIEFING", ln=True, align='C')
+                pdf.set_font("Arial", 'I', 10)
+                pdf.cell(0, 5, f"Generated: {datetime.now().strftime('%Y-%m-%d')} | Confidential", ln=True, align='C')
+                pdf.ln(10)
+                
+                # Section 1: Vessel Particulars
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(0, 8, "1. VESSEL & VOYAGE PARTICULARS", ln=True, border='B')
+                pdf.ln(2)
+                pdf.set_font("Arial", '', 10)
+                pdf.cell(0, 6, f"Vessel Name: {vessel_name} (IMO: {imo_input})", ln=True)
+                pdf.cell(0, 6, f"Vessel Profile: {vessel_age}-year-old {vessel_type}", ln=True)
+                pdf.cell(0, 6, f"Target Port of Call: {selected_port} ({port_info['regime']})", ln=True)
+                pdf.cell(0, 6, f"Target Risk Index: {adjusted_risk}%", ln=True)
+                pdf.ln(8)
+                
+                # Section 2: Financial Exposure
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(0, 8, "2. FINANCIAL RISK EXPOSURE", ln=True, border='B')
+                pdf.ln(2)
+                pdf.set_font("Arial", '', 10)
+                pdf.cell(0, 6, f"Calculated Off-Hire Detention Exposure: ${expected_exposure:,.2f} USD / day", ln=True)
+                pdf.ln(8)
+                
+                # Section 3: Target Matrix (Parsing the AI Markdown)
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(0, 8, "3. PRIORITY TARGET MATRIX & ACTIONS", ln=True, border='B')
+                pdf.ln(4)
+                pdf.set_font("Arial", '', 10)
+                
+                # Clean and print the AI generated table into readable PDF text
+                for line in findings_text.split('\n'):
+                    line = line.strip()
+                    # Skip empty lines and markdown table separators
+                    if not line or line.startswith('|-') or line.startswith('| Code |'):
+                        continue
+                    # Format table rows into clean text
+                    clean_line = line.replace('|', '').replace('**', '').strip()
+                    if clean_line:
+                        pdf.multi_cell(0, 6, f"- {clean_line}")
+                        pdf.ln(2)
+                
+                # Footer
+                pdf.set_y(-20)
+                pdf.set_font('Arial', 'I', 8)
+                pdf.cell(0, 10, 'Generated autonomously by Vector OS - Predictive Maritime Intelligence', 0, 0, 'C')
+                
+                # Safe Export
                 pdf_output = pdf.output(dest='S')
                 if isinstance(pdf_output, str):
                     return pdf_output.encode('latin1')
@@ -185,8 +225,8 @@ if run_audit or imo_input:
                     return bytes(pdf_output)
             try:
                 st.download_button(
-                    label="📥 Export PDF Briefing",
-                    data=create_pdf(),
+                    label="📥 Export Formal PDF Briefing",
+                    data=create_pdf(findings_table), # Pass the AI findings to the PDF function
                     file_name=f"Vector_Audit_{imo_input}.pdf",
                     mime="application/pdf"
                 )
