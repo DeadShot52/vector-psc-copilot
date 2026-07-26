@@ -3,6 +3,7 @@ import pandas as pd
 from fpdf import FPDF
 from groq import Groq
 import os
+import math
 from datetime import datetime
 
 # ==========================================
@@ -122,12 +123,32 @@ def generate_audit_intelligence(vessel_type, vessel_age, target_port, regime, gr
 # ENTERPRISE PDF GENERATOR CLASS
 # ==========================================
 class PDFReport(FPDF):
+    angle = 0
+
+    def rotate(self, angle, x=-1, y=-1):
+        """Mathematical function to rotate PDF layers"""
+        if x == -1:
+            x = self.x
+        if y == -1:
+            y = self.y
+        if self.angle != 0:
+            self._out('Q')
+        self.angle = angle
+        if angle != 0:
+            angle *= 3.14159265 / 180
+            c = math.cos(angle)
+            s = math.sin(angle)
+            cx = x * self.k
+            cy = (self.h - y) * self.k
+            self._out(f'q {c:.5f} {s:.5f} {-s:.5f} {c:.5f} {cx:.2f} {cy:.2f} cm 1 0 0 1 {-cx:.2f} {-cy:.2f} cm')
+
     def header(self):
-        # 1. Background Watermark (Rendered first so it sits behind text)
-        self.set_font('Arial', 'B', 65)
-        self.set_text_color(240, 245, 250)  # Very faint, professional blue-grey
-        self.set_y(130)
-        self.cell(0, 10, 'VECTOR OS', 0, 0, 'C')
+        # 1. Background Watermark (Slanted & Darker)
+        self.set_font('Arial', 'B', 75)
+        self.set_text_color(200, 205, 210)  # Darker, easily visible grey
+        self.rotate(45, 105, 148)  # Rotate 45 degrees around the page center
+        self.text(45, 160, 'VECTOR OS')
+        self.rotate(0)  # Reset rotation back to straight for the main text
         
         # 2. Reset Y position back to top for the header text
         self.set_y(10)
@@ -137,7 +158,7 @@ class PDFReport(FPDF):
         self.set_text_color(100, 100, 100)
         self.cell(0, 10, 'VECTOR OS - CONFIDENTIAL FLEET INTELLIGENCE', 0, 1, 'R')
         
-        # 4. Fixed Header Underline (The typo was here!)
+        # 4. Clean Header Underline
         self.line(10, 20, 200, 20) 
 
     def footer(self):
@@ -291,4 +312,4 @@ if st.session_state.audit_started and imo_input:
                 )
             except Exception as e:
                 st.error(f"PDF Error: {e}")
-                
+        
